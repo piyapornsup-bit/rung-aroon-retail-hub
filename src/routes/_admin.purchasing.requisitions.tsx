@@ -281,7 +281,7 @@ function RequisitionsPage() {
   // Delete
   const handleDelete = () => {
     if (!deleteTarget) return;
-    // Remove from PR list via store or notification
+    actions.deletePurchaseRequisition(deleteTarget.id);
     toast.success(`ลบใบเสนอซื้อ ${deleteTarget.prNumber} สำเร็จ`);
     setDeleteTarget(null);
   };

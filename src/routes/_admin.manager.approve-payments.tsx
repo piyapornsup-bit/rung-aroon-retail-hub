@@ -119,8 +119,10 @@ function ApprovePaymentsPage() {
     if (!targetPayment) return;
     const res = actions.decidePaymentRequest(targetPayment.id, "อนุมัติจ่ายแล้ว");
     if (res.ok) {
-      toast.success(`อนุมัติคำขอจ่ายเงิน ${targetPayment.requestNumber} แล้ว`, {
-        description: `ยอดชำระ ฿${formatNumber(targetPayment.amount)} ให้แก่ ${targetPayment.payee}`,
+      const reqId = targetPayment.id || (targetPayment as any).requestNumber;
+      const supplier = targetPayment.supplierName || (targetPayment as any).companyName || (targetPayment as any).payee;
+      toast.success(`อนุมัติคำขอจ่ายเงิน ${reqId} แล้ว`, {
+        description: `ยอดชำระ ฿${formatNumber(targetPayment.amount)} ให้แก่ ${supplier}`,
       });
       setConfirmApproveOpen(false);
       setDetailPayment(null);
@@ -142,7 +144,8 @@ function ApprovePaymentsPage() {
     }
     const res = actions.decidePaymentRequest(targetPayment.id, "ปฏิเสธ", rejectReason.trim());
     if (res.ok) {
-      toast.warning(`ปฏิเสธคำขอจ่ายเงิน ${targetPayment.requestNumber} แล้ว`, {
+      const reqId = targetPayment.id || (targetPayment as any).requestNumber;
+      toast.warning(`ปฏิเสธคำขอจ่ายเงิน ${reqId} แล้ว`, {
         description: "แจ้งกลับไปยังผู้ยื่นคำขอเพื่อดำเนินการแก้ไข",
       });
       setRejectOpen(false);
@@ -157,7 +160,7 @@ function ApprovePaymentsPage() {
       header: "เลขที่คำขอ",
       accessor: (r) => (
         <div>
-          <span className="font-semibold text-foreground">{r.requestNumber}</span>
+          <span className="font-semibold text-foreground">{r.id || (r as any).requestNumber}</span>
           {r.poNumber && (
             <div className="text-xs text-muted-foreground">PO: {r.poNumber}</div>
           )}
@@ -181,8 +184,8 @@ function ApprovePaymentsPage() {
       header: "ผู้รับเงิน / คู่ค้า",
       accessor: (r) => (
         <div>
-          <div className="font-medium text-foreground">{r.payee}</div>
-          <div className="text-xs text-muted-foreground">{r.companyName} ({r.agentName})</div>
+          <div className="font-medium text-foreground">{r.supplierName || (r as any).companyName || (r as any).payee}</div>
+          <div className="text-xs text-muted-foreground">{r.agentName ? `ตัวแทน: ${r.agentName}` : (r.companyId ?? "")}</div>
         </div>
       ),
       searchable: true,
@@ -341,7 +344,7 @@ function ApprovePaymentsPage() {
                 <div className="flex items-center justify-between gap-4 mr-6">
                   <div>
                     <DialogTitle className="text-xl flex items-center gap-2">
-                      <span>คำขอจ่ายเงิน {detailPayment.requestNumber}</span>
+                      <span>คำขอจ่ายเงิน {detailPayment.id || (detailPayment as any).requestNumber}</span>
                       <StatusBadge status={detailPayment.status} />
                     </DialogTitle>
                     <DialogDescription className="mt-1">
@@ -356,9 +359,11 @@ function ApprovePaymentsPage() {
                 <div className="grid grid-cols-2 gap-3 p-3 bg-muted/40 rounded-lg text-sm">
                   <div>
                     <span className="text-xs text-muted-foreground block">ผู้รับเงิน / คู่ค้า</span>
-                    <span className="font-semibold text-foreground">{detailPayment.payee}</span>
+                    <span className="font-semibold text-foreground">
+                      {detailPayment.supplierName || (detailPayment as any).companyName || (detailPayment as any).payee}
+                    </span>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {detailPayment.companyName} ({detailPayment.agentName})
+                      {detailPayment.agentName ? `ตัวแทน: ${detailPayment.agentName}` : (detailPayment.companyId ?? "")}
                     </div>
                   </div>
                   <div>
@@ -389,7 +394,7 @@ function ApprovePaymentsPage() {
                   <div className="col-span-2">
                     <span className="text-xs text-muted-foreground block">ข้อมูลบัญชีธนาคารสำหรับโอนเงิน</span>
                     <span className="font-medium text-foreground">
-                      {detailPayment.bankAccount || "ชำระเงินสดหน้าร้าน / เช็ค"}
+                      {(detailPayment as any).bankAccount || (detailPayment as any).supplierBankAccount || "ชำระเงินสดหน้าร้าน / เช็ค"}
                     </span>
                   </div>
                   <div className="col-span-2">
@@ -454,7 +459,7 @@ function ApprovePaymentsPage() {
                       </div>
                       <div>
                         <div className="text-sm font-medium text-foreground">
-                          {detailPayment.receiptAttachment || `ใบแจ้งหนี้_${detailPayment.poNumber || detailPayment.requestNumber}.pdf`}
+                          {detailPayment.receiptFileName || (detailPayment as any).receiptAttachment || (detailPayment.receiptNumber ? `ใบแจ้งหนี้_${detailPayment.receiptNumber}.pdf` : `ใบแจ้งหนี้_${detailPayment.poNumber || detailPayment.id}.pdf`)}
                         </div>
                         <div className="text-xs text-muted-foreground">เอกสารรับรองยอดเงินและลายมือชื่อ</div>
                       </div>
@@ -498,12 +503,12 @@ function ApprovePaymentsPage() {
       <ConfirmDialog
         open={confirmApproveOpen}
         onOpenChange={setConfirmApproveOpen}
-        title={`ยืนยันอนุมัติจ่ายเงิน ${targetPayment?.requestNumber}?`}
+        title={`ยืนยันอนุมัติจ่ายเงิน ${targetPayment?.id || (targetPayment as any)?.requestNumber}?`}
         description={
           targetPayment ? (
             <div className="space-y-2 text-sm">
               <p>
-                คุณกำลังจะอนุมัติจ่ายเงินให้แก่ <strong>{targetPayment.payee}</strong> ({targetPayment.companyName})
+                คุณกำลังจะอนุมัติจ่ายเงินให้แก่ <strong>{targetPayment.supplierName || (targetPayment as any).companyName || (targetPayment as any).payee}</strong> {targetPayment.agentName ? `(ตัวแทน: ${targetPayment.agentName})` : ""}
               </p>
               <p className="text-base font-semibold text-primary">
                 ยอดเงิน: ฿{formatNumber(targetPayment.amount)} ({targetPayment.paymentType})
@@ -528,7 +533,7 @@ function ApprovePaymentsPage() {
               <span>ปฏิเสธคำขอจ่ายเงิน</span>
             </DialogTitle>
             <DialogDescription>
-              {targetPayment?.requestNumber} ({targetPayment?.payee})
+              {targetPayment?.id || (targetPayment as any)?.requestNumber} ({targetPayment?.supplierName || (targetPayment as any)?.companyName || (targetPayment as any)?.payee})
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">

@@ -32,6 +32,7 @@ import {
   User,
   UserCheck,
   UserCog,
+  UserPlus,
   Users,
   X,
   XCircle,
@@ -186,7 +187,7 @@ const ROLE_PERMISSIONS: Record<RoleKey, SearchDataType[]> = {
 };
 
 function GlobalSearchPage() {
-  const { state } = useStore();
+  const { state, actions } = useStore();
   const user = useCurrentUser();
   const searchParams = Route.useSearch();
   const navigate = useNavigate();
@@ -197,6 +198,58 @@ function GlobalSearchPage() {
   );
   const [secondaryFilter, setSecondaryFilter] = useState<string>("all");
   const [detailItem, setDetailItem] = useState<any | null>(null);
+
+  // Member Registration State
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [regName, setRegName] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regBirthday, setRegBirthday] = useState("");
+  const [regAddress, setRegAddress] = useState("");
+  const [regError, setRegError] = useState("");
+
+  const handleRegisterMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError("");
+
+    const name = regName.trim();
+    const phone = regPhone.trim().replace(/[\s-]/g, "");
+
+    if (!name) {
+      setRegError("กรุณากรอกชื่อ-นามสกุลสมาชิก");
+      return;
+    }
+
+    if (!phone || phone.length < 9 || phone.length > 10 || !/^\d+$/.test(phone)) {
+      setRegError("กรุณากรอกเบอร์โทรศัพท์ 9-10 หลักให้ถูกต้อง");
+      return;
+    }
+
+    const existing = state.members.find(
+      (m) => m.phone.replace(/[\s-]/g, "") === phone,
+    );
+    if (existing) {
+      setRegError(`เบอร์โทรศัพท์นี้ลงทะเบียนสมาชิกแล้ว (${existing.name} รหัส ${existing.code})`);
+      return;
+    }
+
+    const newMember = actions.addMember({
+      name,
+      phone,
+      birthday: regBirthday.trim(),
+      address: regAddress.trim(),
+    });
+
+    setRegisterOpen(false);
+    setRegName("");
+    setRegPhone("");
+    setRegBirthday("");
+    setRegAddress("");
+    setRegError("");
+
+    toast.success(`สมัครสมาชิกสำเร็จ! รหัสสมาชิก: ${newMember.code}`, {
+      description: `คุณ ${newMember.name} เบอร์โทร ${newMember.phone}`,
+    });
+  };
 
   const allowedTypes = useMemo(() => ROLE_PERMISSIONS[user.role] || ["products"], [user.role]);
   const isAllowed = allowedTypes.includes(selectedType);
@@ -1442,6 +1495,23 @@ function GlobalSearchPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {selectedType === "members" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setRegName("");
+                    setRegPhone("");
+                    setRegBirthday("");
+                    setRegAddress("");
+                    setRegError("");
+                    setRegisterOpen(true);
+                  }}
+                  className="h-7 text-xs bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 gap-1 px-2.5 font-medium"
+                >
+                  <UserPlus className="size-3 text-emerald-600" /> สมัครสมาชิกใหม่
+                </Button>
+              )}
               {(query.trim() || secondaryFilter !== "all") && (
                 <Button
                   variant="ghost"
@@ -1518,6 +1588,102 @@ function GlobalSearchPage() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ────────── Member Registration Dialog ────────── */}
+      <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
+        <DialogContent className="max-w-md rounded-2xl shadow-lift">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                <UserPlus className="size-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground">สมัครสมาชิกใหม่</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  ลงทะเบียนสมาชิกร้านรุ่งอรุณ เพื่อสะสมแต้มและรับสิทธิประโยชน์
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <form onSubmit={handleRegisterMember} className="space-y-3.5 py-1">
+            {regError && (
+              <div className="p-2.5 rounded-lg bg-danger/10 border border-danger/30 text-danger text-xs flex items-center gap-2">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>{regError}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">
+                ชื่อ-นามสกุล <span className="text-danger">*</span>
+              </Label>
+              <Input
+                placeholder="เช่น คุณสมศรี ใจดี"
+                value={regName}
+                onChange={(e) => setRegName(e.target.value)}
+                className="text-xs h-9 bg-card"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">
+                เบอร์โทรศัพท์ (10 หลัก) <span className="text-danger">*</span>
+              </Label>
+              <Input
+                type="tel"
+                placeholder="เช่น 0812345678"
+                value={regPhone}
+                onChange={(e) => setRegPhone(e.target.value)}
+                className="text-xs h-9 bg-card font-mono"
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">ใช้เบอร์โทรศัพท์นี้สำหรับค้นหาและสะสมแต้มที่หน้าร้าน</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">วันเกิด (เดือน-วัน หรือ วว/ดด)</Label>
+              <Input
+                placeholder="เช่น 11-05 (5 พฤศจิกายน)"
+                value={regBirthday}
+                onChange={(e) => setRegBirthday(e.target.value)}
+                className="text-xs h-9 bg-card font-mono"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">ที่อยู่ (ถ้ามี)</Label>
+              <Input
+                placeholder="เช่น 123 หมู่ 4 ต.ศิลา อ.เมือง จ.ขอนแก่น 40000"
+                value={regAddress}
+                onChange={(e) => setRegAddress(e.target.value)}
+                className="text-xs h-9 bg-card"
+              />
+            </div>
+
+            <DialogFooter className="pt-2 gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setRegisterOpen(false)}
+                className="text-xs"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                className="bg-sun-600 hover:bg-sun-700 text-white text-xs gap-1.5"
+              >
+                <CheckCircle2 className="size-3.5" />
+                ยืนยันการสมัครสมาชิก
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </>

@@ -71,6 +71,7 @@ export const STOCK_STATUS_TONE: Record<string, Tone> = {
   // Purchasing domain statuses
   "แปลงเป็น PO แล้ว": "blue",
   รออนุมัติจ่าย: "amber",
+  รออนุมัติจ่ายเงิน: "amber",
   อนุมัติจ่ายแล้ว: "cyan",
   จ่ายเงินแล้ว: "green",
   ยังไม่ขอจ่าย: "gray",

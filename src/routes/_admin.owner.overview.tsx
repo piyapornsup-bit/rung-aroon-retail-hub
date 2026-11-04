@@ -42,7 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatBaht, formatNumber } from "@/lib/format";
 import { salesLast7Days } from "@/lib/mock-data";
-import { useStore } from "@/lib/store";
+import { useStore, getDynamicSalesLast7Days } from "@/lib/store";
 
 export const Route = createFileRoute("/_admin/owner/overview")({
   head: () => ({
@@ -69,19 +69,29 @@ const tooltipStyle = {
 function OwnerOverviewPage() {
   const { state } = useStore();
 
-  const totalStoreSales = salesLast7Days.reduce((a, d) => a + d.inStore, 0);
-  const totalOnlineSales = salesLast7Days.reduce((a, d) => a + d.online, 0);
+  const dynamicSales = useMemo(
+    () => getDynamicSalesLast7Days(state),
+    [state?.sales?.receipts, state?.orders],
+  );
+  const totalStoreSales = dynamicSales.reduce((a, d) => a + d.inStore, 0);
+  const totalOnlineSales = dynamicSales.reduce((a, d) => a + d.online, 0);
   const totalRevenue = totalStoreSales + totalOnlineSales;
   const estimatedGrossProfit = Math.round(totalRevenue * 0.24);
 
-  const totalStockCost = state.catalog.products.reduce((a, p) => a + p.stock * p.costPrice, 0);
+  const getProductCost = (p: any) =>
+    typeof p.costPrice === "number" ? p.costPrice : Math.round((p.price ?? 0) * 0.7);
+
+  const totalStockCost = state.catalog.products.reduce(
+    (a, p) => a + (p.stock ?? 0) * getProductCost(p),
+    0,
+  );
   const archivedReceiptsCount = state.agentReceipts.filter((r) => r.archiveStatus === "จัดเก็บแล้ว").length;
   const pendingReceiptsCount = state.agentReceipts.filter((r) => r.archiveStatus !== "จัดเก็บแล้ว").length;
 
   const categoryBreakdown = state.categories.map((c) => {
     const prods = state.catalog.products.filter((p) => p.category === c.name);
-    const stockQty = prods.reduce((a, p) => a + p.stock, 0);
-    const stockVal = prods.reduce((a, p) => a + p.stock * p.costPrice, 0);
+    const stockQty = prods.reduce((a, p) => a + (p.stock ?? 0), 0);
+    const stockVal = prods.reduce((a, p) => a + (p.stock ?? 0) * getProductCost(p), 0);
     return { name: c.name, stockQty, stockVal };
   });
 
@@ -141,7 +151,7 @@ function OwnerOverviewPage() {
           >
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={salesLast7Days} margin={{ left: -10, right: 8, top: 8 }}>
+                <AreaChart data={dynamicSales} margin={{ left: -10, right: 8, top: 8 }}>
                   <defs>
                     <linearGradient id="gStoreOv" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.4} />

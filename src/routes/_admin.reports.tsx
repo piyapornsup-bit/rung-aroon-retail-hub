@@ -66,7 +66,7 @@ import {
   type OnlineOrder,
   type PurchaseOrder,
 } from "@/lib/mock-data";
-import { useStore, useCurrentUser } from "@/lib/store";
+import { useStore, useCurrentUser, getDynamicSalesLast7Days } from "@/lib/store";
 
 export const Route = createFileRoute("/_admin/reports")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -274,7 +274,8 @@ function ReportsPage() {
 
     if (activeReportId === "overview" || activeReportId === "sales_channels") {
       rows.push(["วันที่", "ยอดขายหน้าร้าน (เคาน์เตอร์)", "ยอดขายออนไลน์", "ยอดขายรวม", "กำไรขั้นต้น (ประมาณการ)"]);
-      for (const d of salesLast7Days ?? []) {
+      const dynamicSalesData = getDynamicSalesLast7Days(state);
+      for (const d of dynamicSalesData ?? []) {
         const total = (d.inStore ?? 0) + (d.online ?? 0);
         const profit = Math.round(total * 0.24);
         rows.push([d.day, (d.inStore ?? 0).toString(), (d.online ?? 0).toString(), total.toString(), profit.toString()]);
@@ -525,7 +526,10 @@ function ReportsPage() {
 
 /* ────────── Report 1: สรุปผลการดำเนินงาน ────────── */
 function OverviewReportSection({ state, onExport }: { state: any; onExport: () => void }) {
-  const data = salesLast7Days ?? [];
+  const data = useMemo(
+    () => getDynamicSalesLast7Days(state),
+    [state?.sales?.receipts, state?.orders],
+  );
   const totalInStore = data.reduce((a, d) => a + (d.inStore ?? 0), 0);
   const totalOnline = data.reduce((a, d) => a + (d.online ?? 0), 0);
   const grandTotal = totalInStore + totalOnline;
@@ -650,7 +654,10 @@ function OverviewReportSection({ state, onExport }: { state: any; onExport: () =
 
 /* ────────── Report 2: ยอดขายแยกช่องทางออนไลน์ และเคาน์เตอร์ ────────── */
 function SalesChannelsReportSection({ state, onExport }: { state: any; onExport: () => void }) {
-  const data = salesLast7Days ?? [];
+  const data = useMemo(
+    () => getDynamicSalesLast7Days(state),
+    [state?.sales?.receipts, state?.orders],
+  );
   const channelData = data.map((d) => ({
     day: d.day,
     หน้าร้าน: d.inStore ?? 0,
@@ -1119,7 +1126,7 @@ function ProcurementReportSection({
   const totalPOAmount = pos.reduce((sum, p) => sum + (p?.totalAmount ?? 0), 0);
   const pendingReceiving = pos.filter((p) => p.status === "รอรับสินค้า" || p.status === "รับสินค้าบางส่วน").length;
   const completedPOs = pos.filter((p) => p.status === "รับครบแล้ว").length;
-  const pendingPayments = paymentRequests.filter((p) => p.status === "รออนุมัติจ่าย").length;
+  const pendingPayments = paymentRequests.filter((p) => p.status === "รออนุมัติจ่ายเงิน" || p.status === "รออนุมัติจ่าย").length;
 
   const poColumns: DataTableColumn<PurchaseOrder>[] = [
     {

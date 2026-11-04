@@ -219,6 +219,8 @@ export interface Member {
   birthday: string; // "MM-DD"
   address: string;
   joinedYear: number;
+  totalSpend?: number;
+  tier?: string;
 }
 
 export const members: Member[] = [
@@ -1323,7 +1325,7 @@ export const purchaseRequisitions: PurchaseRequisition[] = [
 /* ───────────────────────── Payment Requests & Receipts (Round 3 Part 1) ───────────────────────── */
 
 export type PaymentType = "เงินสด" | "เงินเชื่อ";
-export type PaymentRequestStatus = "รออนุมัติจ่าย" | "อนุมัติจ่ายแล้ว" | "จ่ายเงินแล้ว" | "ปฏิเสธ";
+export type PaymentRequestStatus = "รออนุมัติจ่าย" | "รออนุมัติจ่ายเงิน" | "อนุมัติจ่ายแล้ว" | "จ่ายเงินแล้ว" | "ปฏิเสธ";
 
 export interface PaymentRequest {
   id: string;

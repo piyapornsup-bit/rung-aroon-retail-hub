@@ -69,7 +69,7 @@ function OwnerReceiptsPage() {
   );
 
   const totalAmount = useMemo(
-    () => receipts.reduce((sum, r) => sum + r.totalAmount, 0),
+    () => receipts.reduce((sum, r) => sum + (r.amount ?? r.totalAmount ?? 0), 0),
     [receipts],
   );
 
@@ -125,7 +125,7 @@ function OwnerReceiptsPage() {
       header: "วันที่ออกเอกสาร",
       accessor: (r) => (
         <span className="text-xs text-muted-foreground">
-          {formatShortDate(r.receiptDate)}
+          {formatShortDate(r.issueDate ?? r.receiptDate)}
         </span>
       ),
       sortable: true,
@@ -167,7 +167,7 @@ function OwnerReceiptsPage() {
       header: "ยอดเงินรวม",
       accessor: (r) => (
         <span className="font-semibold text-foreground">
-          <Money value={r.totalAmount} />
+          <Money value={r.amount ?? r.totalAmount ?? 0} />
         </span>
       ),
       sortable: true,
@@ -349,7 +349,7 @@ function OwnerReceiptsPage() {
                       เลขที่: {detailReceipt.receiptNumber}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      วันที่: {formatShortDate(detailReceipt.receiptDate)}
+                      วันที่: {formatShortDate(detailReceipt.issueDate ?? detailReceipt.receiptDate)}
                     </div>
                   </div>
                 </div>
@@ -379,8 +379,9 @@ function OwnerReceiptsPage() {
 
                 {/* Amount breakdown calculation */}
                 {(() => {
-                  const vatAmount = Math.round(detailReceipt.totalAmount * 7 / 107);
-                  const subtotal = detailReceipt.totalAmount - vatAmount;
+                  const receiptVal = detailReceipt.amount ?? detailReceipt.totalAmount ?? 0;
+                  const vatAmount = Math.round(receiptVal * 7 / 107);
+                  const subtotal = receiptVal - vatAmount;
                   return (
                     <div className="rounded-lg border border-border overflow-hidden">
                       <table className="w-full text-xs">
@@ -406,7 +407,7 @@ function OwnerReceiptsPage() {
                           <tr>
                             <td className="p-3 text-right text-sm">ยอดเงินสุทธิทั้งสิ้น</td>
                             <td className="p-3 text-right text-base text-primary">
-                              <Money value={detailReceipt.totalAmount} />
+                              <Money value={receiptVal} />
                             </td>
                           </tr>
                         </tfoot>
@@ -483,7 +484,7 @@ function OwnerReceiptsPage() {
                 <strong>{confirmArchiveTarget.companyName}</strong> ({confirmArchiveTarget.agentName})
               </p>
               <p className="text-base font-semibold text-primary">
-                ยอดเงิน: ฿{formatNumber(confirmArchiveTarget.totalAmount)}
+                ยอดเงิน: ฿{formatNumber(confirmArchiveTarget.amount ?? confirmArchiveTarget.totalAmount ?? 0)}
               </p>
               <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
                 * ระบบจะบันทึกว่าเอกสารถูกจัดเก็บเข้าแฟ้มบัญชีแล้ว พร้อมบันทึกชื่อผู้จัดเก็บและเวลาที่ดำเนินการ

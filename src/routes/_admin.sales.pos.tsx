@@ -98,6 +98,14 @@ function PosPage() {
   const [activeMember, setActiveMember] = useState<Member | null>(null);
   const [pointsToRedeem, setPointsToRedeem] = useState<number>(0);
 
+  // Member Registration Dialog
+  const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
+  const [regName, setRegName] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regBirthday, setRegBirthday] = useState("");
+  const [regAddress, setRegAddress] = useState("");
+  const [regError, setRegError] = useState("");
+
   // Member QR Scan Dialog & Simulation
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [qrInput, setQrInput] = useState("");
@@ -266,13 +274,73 @@ function PosPage() {
       setMemberSearch("");
       setPointsToRedeem(0);
       toast.success(`พบข้อมูลสมาชิก: ${found.name}`, {
-        description: `ระดับ ${found.tier} · มีแต้มสะสม ${formatNumber(found.points)} แต้ม`,
+        description: `ระดับ ${found.tier || "ทั่วไป"} · มีแต้มสะสม ${formatNumber(found.points)} แต้ม`,
       });
     } else {
       toast.error("ไม่พบข้อมูลสมาชิก", {
         description: "ลองค้นหาด้วยเบอร์โทรศัพท์ 10 หลัก หรือรหัสสมาชิก",
+        action: {
+          label: "สมัครสมาชิกใหม่",
+          onClick: () => {
+            setRegError("");
+            setRegName("");
+            setRegPhone(query);
+            setRegBirthday("");
+            setRegAddress("");
+            setRegisterDialogOpen(true);
+          },
+        },
       });
     }
+  };
+
+  // Member Registration Handler
+  const handleRegisterMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError("");
+
+    const name = regName.trim();
+    const phone = regPhone.trim().replace(/[\s-]/g, "");
+
+    if (!name) {
+      setRegError("กรุณากรอกชื่อ-นามสกุลสมาชิก");
+      return;
+    }
+
+    if (!phone || phone.length < 9 || phone.length > 10 || !/^\d+$/.test(phone)) {
+      setRegError("กรุณากรอกเบอร์โทรศัพท์ 9-10 หลักให้ถูกต้อง");
+      return;
+    }
+
+    // Check duplicate phone
+    const existing = state.members.find(
+      (m) => m.phone.replace(/[\s-]/g, "") === phone,
+    );
+    if (existing) {
+      setRegError(`เบอร์โทรศัพท์นี้ลงทะเบียนสมาชิกแล้ว (${existing.name} รหัส ${existing.code})`);
+      return;
+    }
+
+    const newMember = actions.addMember({
+      name,
+      phone,
+      birthday: regBirthday.trim(),
+      address: regAddress.trim(),
+    });
+
+    setActiveMember(newMember);
+    setMemberSearch("");
+    setPointsToRedeem(0);
+    setRegisterDialogOpen(false);
+    setRegName("");
+    setRegPhone("");
+    setRegBirthday("");
+    setRegAddress("");
+    setRegError("");
+
+    toast.success(`สมัครสมาชิกสำเร็จ! รหัสสมาชิก: ${newMember.code}`, {
+      description: `คุณ ${newMember.name} เบอร์โทร ${newMember.phone} เริ่มสะสมแต้มได้ทันที`,
+    });
   };
 
   const removeMember = () => {
@@ -626,6 +694,23 @@ function PosPage() {
                       <QrCode className="size-3.5 text-sun-700" />
                       สแกน QR สมาชิก
                     </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setRegError("");
+                        setRegName("");
+                        setRegPhone(memberSearch.trim());
+                        setRegBirthday("");
+                        setRegAddress("");
+                        setRegisterDialogOpen(true);
+                      }}
+                      className="h-8 text-xs bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 font-medium shrink-0 gap-1.5"
+                    >
+                      <UserPlus className="size-3.5 text-emerald-600" />
+                      สมัครสมาชิกใหม่
+                    </Button>
                   </form>
                 </div>
               )}
@@ -633,7 +718,7 @@ function PosPage() {
               {/* Point Earning Rule Hint */}
               <div className="flex items-center gap-1.5 text-[11px] text-amber-800 bg-sun-100/70 px-2 py-1 rounded">
                 <Sparkles className="size-3 text-amber-600 shrink-0" />
-                <span>สิทธิประโยชน์สมาชิก: ซื้อครบ {earnStepBaht} บาท ได้ {earnPointsPerStep} แต้ม</span>
+                <span>สิทธิประโยชน์สมาชิก: ซื้อครบ {earnStepBaht} บาท ได้ {earnPointsPerStep} แต้ม (คำนวณจากยอดสุทธิหลังหักส่วนลด)</span>
               </div>
 
               {/* Points Redemption Slider / Input if Member is Present */}
@@ -645,15 +730,72 @@ function PosPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="pt-2 border-t border-sun-200/60 text-xs space-y-1.5">
+                  <div className="pt-2 border-t border-sun-200/60 text-xs space-y-2">
                     <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-muted-foreground">ใช้แต้มลดหย่อน ({pointsPerBaht} แต้ม = 1 บาท):</span>
+                      <span className="text-muted-foreground">ใช้แต้มแลกส่วนลด ({pointsPerBaht} แต้ม = 1 บาท):</span>
                       <span className="font-semibold text-sun-800">
-                        ใช้ {pointsToRedeem} แต้ม (ลด ฿{pointsToBaht(pointsToRedeem, pointsPerBaht)})
+                        {pointsToRedeem > 0 ? (
+                          <>ใช้ {pointsToRedeem} แต้ม (ลด ฿{bill.discount})</>
+                        ) : (
+                          <span className="text-muted-foreground font-normal">ยังไม่ได้ระบุแต้ม</span>
+                        )}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[0, minPointsToRedeem, minPointsToRedeem > 0 ? minPointsToRedeem * 2 : 20, minPointsToRedeem > 0 ? minPointsToRedeem * 4 : 50]
+
+                    {/* Manual Point Input & Quick Max */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="relative flex-1">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={maxPoints}
+                          step={pointsPerBaht}
+                          placeholder={`ระบุแต้มที่ต้องการใช้ (สูงสุด ${maxPoints})...`}
+                          value={pointsToRedeem === 0 ? "" : pointsToRedeem}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === "") {
+                              setPointsToRedeem(0);
+                              return;
+                            }
+                            const val = parseInt(raw, 10);
+                            if (isNaN(val) || val < 0) {
+                              setPointsToRedeem(0);
+                              return;
+                            }
+                            if (val > activeMember.points) {
+                              toast.warning(`แต้มที่กรอกเกินแต้มสะสมที่มี (${formatNumber(activeMember.points)} แต้ม)`);
+                              setPointsToRedeem(maxPoints);
+                              return;
+                            }
+                            if (val > maxPoints) {
+                              toast.warning(`ยอดส่วนลดต้องไม่เกินยอดรวมของบิล (ใช้ได้สูงสุด ${formatNumber(maxPoints)} แต้ม)`);
+                              setPointsToRedeem(maxPoints);
+                              return;
+                            }
+                            setPointsToRedeem(val);
+                          }}
+                          className="h-8 text-xs bg-card border-sun-300 font-mono"
+                        />
+                      </div>
+                      {maxPoints > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPointsToRedeem(maxPoints)}
+                          className={`px-2.5 h-8 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
+                            pointsToRedeem === maxPoints
+                              ? "bg-sun-600 text-white shadow-xs"
+                              : "bg-sun-100 hover:bg-sun-200 text-sun-900 border border-sun-300"
+                          }`}
+                        >
+                          ใช้สูงสุด ({maxPoints})
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Quick Preset Buttons */}
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      {[0, minPointsToRedeem, minPointsToRedeem > 0 ? minPointsToRedeem * 2 : 20, minPointsToRedeem > 0 ? minPointsToRedeem * 4 : 50, 100]
                         .filter((v, i, a) => a.indexOf(v) === i && v <= maxPoints)
                         .map((pts) => (
                           <button
@@ -667,17 +809,6 @@ function PosPage() {
                             {pts === 0 ? "ไม่ใช้" : `${pts} แต้ม`}
                           </button>
                         ))}
-                      {maxPoints > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setPointsToRedeem(maxPoints)}
-                          className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ml-auto ${
-                            pointsToRedeem === maxPoints ? "bg-sun-600 text-white font-bold" : "bg-card text-sun-700 border border-sun-300"
-                          }`}
-                        >
-                          สูงสุด ({maxPoints})
-                        </button>
-                      )}
                     </div>
                   </div>
                 )
@@ -1135,6 +1266,102 @@ function PosPage() {
               ปิดหน้าต่าง
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ────────── Member Registration Dialog ────────── */}
+      <Dialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen}>
+        <DialogContent className="max-w-md rounded-2xl shadow-lift">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                <UserPlus className="size-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground">สมัครสมาชิกใหม่</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  ลงทะเบียนสมาชิกร้านรุ่งอรุณ เพื่อสะสมแต้มและรับสิทธิประโยชน์
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <form onSubmit={handleRegisterMember} className="space-y-3.5 py-1">
+            {regError && (
+              <div className="p-2.5 rounded-lg bg-danger/10 border border-danger/30 text-danger text-xs flex items-center gap-2">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>{regError}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">
+                ชื่อ-นามสกุล <span className="text-danger">*</span>
+              </Label>
+              <Input
+                placeholder="เช่น คุณสมศรี ใจดี"
+                value={regName}
+                onChange={(e) => setRegName(e.target.value)}
+                className="text-xs h-9 bg-card"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">
+                เบอร์โทรศัพท์ (10 หลัก) <span className="text-danger">*</span>
+              </Label>
+              <Input
+                type="tel"
+                placeholder="เช่น 0812345678"
+                value={regPhone}
+                onChange={(e) => setRegPhone(e.target.value)}
+                className="text-xs h-9 bg-card font-mono"
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">ใช้เบอร์โทรศัพท์นี้สำหรับค้นหาและสะสมแต้มที่หน้าร้าน</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">วันเกิด (เดือน-วัน หรือ วว/ดด)</Label>
+              <Input
+                placeholder="เช่น 11-05 (5 พฤศจิกายน)"
+                value={regBirthday}
+                onChange={(e) => setRegBirthday(e.target.value)}
+                className="text-xs h-9 bg-card font-mono"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">ที่อยู่ (ถ้ามี)</Label>
+              <Input
+                placeholder="เช่น 123 หมู่ 4 ต.ศิลา อ.เมือง จ.ขอนแก่น 40000"
+                value={regAddress}
+                onChange={(e) => setRegAddress(e.target.value)}
+                className="text-xs h-9 bg-card"
+              />
+            </div>
+
+            <DialogFooter className="pt-2 gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setRegisterDialogOpen(false)}
+                className="text-xs"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                className="bg-sun-600 hover:bg-sun-700 text-white text-xs gap-1.5"
+              >
+                <CheckCircle2 className="size-3.5" />
+                ยืนยันการสมัครสมาชิก
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

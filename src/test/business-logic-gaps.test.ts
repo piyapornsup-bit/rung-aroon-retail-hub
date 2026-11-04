@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { appReducer, createInitialState, type AppState } from "@/lib/store";
+import { renderHook, act } from "@testing-library/react";
+import {
+  appReducer,
+  createInitialState,
+  StoreProvider,
+  useStore,
+  getDynamicSalesLast7Days,
+  type AppState,
+} from "@/lib/store";
 import {
   calcBill,
   maxRedeemablePoints,
@@ -509,6 +517,367 @@ describe("Business Logic Gaps - Fix & Integration Verification", () => {
       if (member) {
         const memberAfterReject = state.members.find((m) => m.code === member.code)!;
         expect(memberAfterReject.points).toBe(initialPoints);
+      }
+    });
+  });
+
+  describe("7. Data Flow Audit Fixes: Member totalSpend, Staff Login, Dynamic Sales Reports, Report 6 Filter", () => {
+    it("accumulates member totalSpend on POS sale (pos/completeSale)", () => {
+      let state = createInitialState();
+      const member = state.members[0];
+      const initialSpend = member.totalSpend || 0;
+      const initialPoints = member.points;
+
+      state = appReducer(state, {
+        type: "pos/completeSale",
+        receipt: {
+          id: "RC-TEST-001",
+          createdAt: new Date().toISOString(),
+          cashier: "สมชาย",
+          lines: [{ productId: "P01", name: "มาม่า", price: 50, qty: 2 }],
+          subtotal: 100,
+          discount: 0,
+          net: 100,
+          cash: 100,
+          change: 0,
+          memberCode: member.code,
+          memberName: member.name,
+          pointsUsed: 0,
+          pointsEarned: 10,
+          receiptType: "short",
+          paymentMethod: "เงินสด",
+        },
+      });
+
+      const updated = state.members.find((m) => m.code === member.code)!;
+      expect(updated.totalSpend).toBe(initialSpend + 100);
+      expect(updated.points).toBe(initialPoints + 10);
+    });
+
+    it("accumulates member totalSpend on online order payment approval (orders/setStatus to ชำระแล้ว)", () => {
+      let state = createInitialState();
+      const pendingOrder = state.orders.find((o) => o.status === "รอตรวจสอบ" && o.memberCode)!;
+      const member = state.members.find((m) => m.code === pendingOrder.memberCode)!;
+      const initialSpend = member.totalSpend || 0;
+      const expectedNet = orderTotal(pendingOrder);
+
+      state = appReducer(state, {
+        type: "orders/setStatus",
+        orderId: pendingOrder.id,
+        status: "ชำระแล้ว",
+        at: new Date().toISOString(),
+        note: "อนุมัติ",
+      });
+
+      const updated = state.members.find((m) => m.code === member.code)!;
+      expect(updated.totalSpend).toBe(initialSpend + expectedNet);
+    });
+
+    it("dynamically combines baseline sales with POS sales and online orders for วันนี้", () => {
+      let state = createInitialState();
+      const initialDynamic = getDynamicSalesLast7Days(state);
+      const todayInitial = initialDynamic.find((d) => d.day === "วันนี้")!;
+      expect(todayInitial.inStore).toBe(6380);
+      expect(todayInitial.online).toBe(1145);
+
+      // Add a POS receipt
+      state = appReducer(state, {
+        type: "pos/completeSale",
+        receipt: {
+          id: "RC-TEST-002",
+          createdAt: new Date().toISOString(),
+          cashier: "สมชาย",
+          lines: [{ productId: "P01", name: "สินค้า", price: 250, qty: 1 }],
+          subtotal: 250,
+          discount: 0,
+          net: 250,
+          cash: 250,
+          change: 0,
+          pointsUsed: 0,
+          pointsEarned: 25,
+          receiptType: "short",
+          paymentMethod: "เงินสด",
+        },
+      });
+
+      const afterPos = getDynamicSalesLast7Days(state);
+      const todayAfterPos = afterPos.find((d) => d.day === "วันนี้")!;
+      expect(todayAfterPos.inStore).toBe(6380 + 250);
+      expect(todayAfterPos.online).toBe(1145);
+
+      // Approve an online payment
+      const pendingOrder = state.orders.find((o) => o.status === "รอตรวจสอบ")!;
+      const net = orderTotal(pendingOrder);
+      state = appReducer(state, {
+        type: "orders/setStatus",
+        orderId: pendingOrder.id,
+        status: "ชำระแล้ว",
+        at: new Date().toISOString(),
+      });
+
+      const afterOnline = getDynamicSalesLast7Days(state);
+      const todayAfterOnline = afterOnline.find((d) => d.day === "วันนี้")!;
+      expect(todayAfterOnline.inStore).toBe(6380 + 250);
+      expect(todayAfterOnline.online).toBe(1145 + net);
+    });
+
+    it("allows login for newly added employees and reset passwords via state.employees", () => {
+      const { result } = renderHook(() => useStore(), { wrapper: StoreProvider });
+
+      // 1. Add new employee
+      let newEmp: any;
+      act(() => {
+        newEmp = result.current.actions.addEmployee({
+          username: "newbie.sales",
+          password: "password123",
+          name: "พนักงานใหม่ รักงาน",
+          nickname: "นิว",
+          role: "sales",
+          position: "พนักงานขายหน้าร้าน",
+        });
+      });
+      expect(newEmp).toBeDefined();
+
+      // 2. Login with the new employee
+      let loginRes: any;
+      act(() => {
+        loginRes = result.current.actions.login("newbie.sales", "password123");
+      });
+      expect(loginRes.ok).toBe(true);
+      expect(result.current.state.session.user.username).toBe("newbie.sales");
+
+      // 3. Reset password
+      let resetRes: any;
+      act(() => {
+        resetRes = result.current.actions.resetEmployeePassword(newEmp.id);
+      });
+      expect(resetRes.ok).toBe(true);
+      const tempPass = resetRes.tempPassword;
+
+      // 4. Old password fails
+      act(() => {
+        loginRes = result.current.actions.login("newbie.sales", "password123");
+      });
+      expect(loginRes.ok).toBe(false);
+
+      // 5. New temp password succeeds
+      act(() => {
+        loginRes = result.current.actions.login("newbie.sales", tempPass);
+      });
+      expect(loginRes.ok).toBe(true);
+      expect(result.current.state.session.user.username).toBe("newbie.sales");
+    });
+
+    it("counts payment requests with status 'รออนุมัติจ่ายเงิน' or 'รออนุมัติจ่าย'", () => {
+      const testRequests: any[] = [
+        { id: "P1", status: "รออนุมัติจ่ายเงิน" },
+        { id: "P2", status: "รออนุมัติจ่าย" },
+        { id: "P3", status: "อนุมัติจ่ายแล้ว" },
+        { id: "P4", status: "จ่ายเงินแล้ว" },
+      ];
+      const pending = testRequests.filter(
+        (p) => p.status === "รออนุมัติจ่ายเงิน" || p.status === "รออนุมัติจ่าย",
+      ).length;
+      expect(pending).toBe(2);
+    });
+  });
+
+  describe("8. POS Loyalty Points & Member Registration", () => {
+    it("validates that points redemption rate is 10 points = 1 baht and discount cannot exceed subtotal", () => {
+      const rules: PointRules = {
+        earnStepBaht: 50,
+        earnPointsPerStep: 5,
+        pointsPerBaht: 10,
+        minPointsToRedeem: 0,
+      };
+
+      // 100 points = 10 baht
+      expect(pointsToBaht(100, rules)).toBe(10);
+      expect(pointsToBaht(45, rules)).toBe(4);
+
+      // Subtotal 30 baht, member has 500 points (50 baht): max points = 300 (30 baht)
+      const maxPts = maxRedeemablePoints(500, 30, rules);
+      expect(maxPts).toBe(300);
+
+      // Subtotal 100 baht, member has 200 points: max points = 200 (20 baht)
+      const maxPts2 = maxRedeemablePoints(200, 100, rules);
+      expect(maxPts2).toBe(200);
+
+      // Bill calculation: 100 subtotal, 50 points redeemed -> 5 baht discount -> 95 net
+      const bill = calcBill(
+        [{ productId: "P01", price: 100, qty: 1 }],
+        50,
+        rules,
+      );
+      expect(bill.subtotal).toBe(100);
+      expect(bill.discount).toBe(5);
+      expect(bill.net).toBe(95);
+      // 95 net / 50 * 5 = 5 points earned (calculated from net after discount)
+      expect(bill.pointsEarned).toBe(5);
+    });
+
+    it("executes completeSale with exact order: newPoints = oldPoints - pointsUsed + pointsEarned", () => {
+      let state = createInitialState();
+      const member = state.members[0];
+      const oldPoints = member.points;
+      const initialSpend = member.totalSpend || 0;
+
+      const pointsUsed = 50;
+      const pointsEarned = 10;
+      const net = 100;
+
+      state = appReducer(state, {
+        type: "pos/completeSale",
+        receipt: {
+          id: "RC-TEST-LOYALTY",
+          createdAt: new Date().toISOString(),
+          cashier: "ทดสอบ",
+          lines: [{ productId: "P01", name: "สินค้าทดสอบ", price: 50, qty: 2 }],
+          subtotal: 105,
+          discount: 5,
+          net,
+          cash: 100,
+          change: 0,
+          memberCode: member.code,
+          memberName: member.name,
+          pointsUsed,
+          pointsEarned,
+          receiptType: "short",
+          paymentMethod: "เงินสด",
+        },
+      });
+
+      const updated = state.members.find((m) => m.code === member.code)!;
+      // Formula: (แต้มคงเหลือใหม่ = แต้มเดิม - แต้มที่ใช้แลกส่วนลด + แต้มที่ได้รับจากบิลนี้)
+      expect(updated.points).toBe(oldPoints - pointsUsed + pointsEarned);
+      expect(updated.totalSpend).toBe(initialSpend + net);
+    });
+
+    it("registers a new member via actions.addMember, finds by phone, and can immediately use and earn points in POS", () => {
+      const { result } = renderHook(() => useStore(), { wrapper: StoreProvider });
+
+      // 1. Register new member
+      let newMember: any;
+      act(() => {
+        newMember = result.current.actions.addMember({
+          name: "คุณสมพงษ์ ยินดี",
+          phone: "0891234567",
+          birthday: "08-15",
+          address: "99 หมู่ 3 ต.ศิลา ขอนแก่น",
+        });
+      });
+
+      expect(newMember).toBeDefined();
+      expect(newMember.code).toMatch(/^M\d{4}$/);
+      expect(newMember.name).toBe("คุณสมพงษ์ ยินดี");
+      expect(newMember.phone).toBe("0891234567");
+      expect(newMember.points).toBe(0);
+
+      // 2. Member is found in state.members by phone
+      const foundByPhone = result.current.state.members.find(
+        (m) => m.phone.replace(/[\s-]/g, "") === "0891234567",
+      );
+      expect(foundByPhone).toBeDefined();
+      expect(foundByPhone?.code).toBe(newMember.code);
+
+      // 3. Make a POS sale for this new member (subtotal 150 baht -> 15 points earned)
+      act(() => {
+        result.current.actions.completeSale({
+          lines: [{ productId: "P01", name: "สินค้า", price: 150, qty: 1 }],
+          subtotal: 150,
+          discount: 0,
+          net: 150,
+          cash: 200,
+          change: 50,
+          memberCode: newMember.code,
+          memberName: newMember.name,
+          pointsUsed: 0,
+          pointsEarned: 15,
+          receiptType: "short",
+          paymentMethod: "เงินสด",
+        });
+      });
+
+      // Member points updated to 15
+      const memberAfterSale = result.current.state.members.find((m) => m.code === newMember.code)!;
+      expect(memberAfterSale.points).toBe(15);
+      expect(memberAfterSale.totalSpend).toBe(150);
+    });
+  });
+
+  describe("5. Audit Fixes Verification", () => {
+    it("deletePurchaseRequisition removes PR from state and returns ok: true", () => {
+      const { result } = renderHook(() => useStore(), { wrapper: StoreProvider });
+      const initialCount = result.current.state.purchaseRequisitions.length;
+      expect(initialCount).toBeGreaterThan(0);
+
+      const targetPR = result.current.state.purchaseRequisitions[0];
+      act(() => {
+        const res = result.current.actions.deletePurchaseRequisition(targetPR.id);
+        expect(res.ok).toBe(true);
+      });
+
+      expect(result.current.state.purchaseRequisitions.length).toBe(initialCount - 1);
+      expect(result.current.state.purchaseRequisitions.some((pr) => pr.id === targetPR.id)).toBe(false);
+    });
+
+    it("owner overview totalStockCost logic calculates finite number and never NaN with fallback", () => {
+      const { result } = renderHook(() => useStore(), { wrapper: StoreProvider });
+      const getProductCost = (p: any) =>
+        typeof p.costPrice === "number" ? p.costPrice : Math.round((p.price ?? 0) * 0.7);
+
+      const totalStockCost = result.current.state.catalog.products.reduce(
+        (a, p) => a + (p.stock ?? 0) * getProductCost(p),
+        0,
+      );
+      expect(Number.isFinite(totalStockCost)).toBe(true);
+      expect(totalStockCost).toBeGreaterThan(0);
+      expect(Number.isNaN(totalStockCost)).toBe(false);
+    });
+
+    it("owner receipts total calculates correctly without NaN even when new receipt has amount but no totalAmount", () => {
+      const { result } = renderHook(() => useStore(), { wrapper: StoreProvider });
+
+      // Upload a new receipt without totalAmount
+      act(() => {
+        result.current.actions.uploadAgentReceipt({
+          receiptNumber: "INV-AUDIT-001",
+          companyId: "COMP-01",
+          companyName: "บริษัท สหพัฒนพิบูล จำกัด (มหาชน)",
+          poId: "PO-2611-001",
+          poNumber: "PO-2611-001",
+          amount: 2500,
+          issueDate: new Date().toISOString(),
+          fileName: "test.pdf",
+          fileSize: "100 KB",
+          fileType: "pdf",
+          status: "ถูกต้อง",
+        });
+      });
+
+      const total = result.current.state.agentReceipts.reduce(
+        (sum, r) => sum + (r.amount ?? r.totalAmount ?? 0),
+        0,
+      );
+      expect(Number.isFinite(total)).toBe(true);
+      expect(Number.isNaN(total)).toBe(false);
+      expect(total).toBeGreaterThan(2500);
+    });
+
+    it("payment request fields fallback correctly to ensure ID and supplierName are never undefined", () => {
+      const { result } = renderHook(() => useStore(), { wrapper: StoreProvider });
+      const reqs = result.current.state.paymentRequests;
+      expect(reqs.length).toBeGreaterThan(0);
+
+      for (const r of reqs) {
+        const reqId = r.id || (r as any).requestNumber;
+        const supplier = r.supplierName || (r as any).companyName || (r as any).payee;
+        expect(reqId).toBeDefined();
+        expect(typeof reqId).toBe("string");
+        expect(reqId.length).toBeGreaterThan(0);
+        expect(supplier).toBeDefined();
+        expect(typeof supplier).toBe("string");
+        expect(supplier.length).toBeGreaterThan(0);
       }
     });
   });

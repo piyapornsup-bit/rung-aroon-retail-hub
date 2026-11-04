@@ -23,6 +23,7 @@ import {
   agentReceipts as seedReceipts,
   initialPromotions as seedPromotions,
   initialStoreSettings as seedSettings,
+  salesLast7Days,
   staffUsers,
   orderSubtotal,
   orderTotal,
@@ -148,6 +149,8 @@ export type Action =
   | { type: "session/switchRole"; role: RoleKey }
   // pos
   | { type: "pos/completeSale"; receipt: Receipt }
+  // members
+  | { type: "members/add"; member: Member }
   // orders
   | { type: "orders/setStatus"; orderId: string; status: OrderStatus; at: string; note?: string }
   // returns
@@ -206,6 +209,7 @@ export type Action =
   | { type: "requisitions/add"; pr: PurchaseRequisition }
   | { type: "requisitions/updateStatus"; id: string; status: PRStatus; rejectionReason?: string; at: string; by: string }
   | { type: "requisitions/convertToPO"; prId: string; newPO: PurchaseOrder }
+  | { type: "requisitions/delete"; id: string }
   // purchasing payments & receipts
   | { type: "payments/addRequest"; request: PaymentRequest }
   | { type: "payments/updateStatus"; id: string; status: PaymentRequestStatus; rejectionReason?: string; at: string; by: string }
@@ -262,13 +266,24 @@ export function appReducer(state: AppState, action: Action): AppState {
         members: r.memberCode
           ? state.members.map((m) =>
               m.code === r.memberCode
-                ? { ...m, points: m.points - r.pointsUsed + r.pointsEarned }
+                ? {
+                    ...m,
+                    points: Math.max(0, m.points - (r.pointsUsed || 0)) + (r.pointsEarned || 0),
+                    totalSpend: (m.totalSpend || 0) + r.net,
+                  }
                 : m,
             )
           : state.members,
         sales: { receipts: [r, ...state.sales.receipts], seq: state.sales.seq + 1 },
       };
     }
+
+    /* members */
+    case "members/add":
+      return {
+        ...state,
+        members: [action.member, ...state.members],
+      };
 
     /* orders */
     case "orders/setStatus": {
@@ -365,11 +380,15 @@ export function appReducer(state: AppState, action: Action): AppState {
           paymentMethod: "เงินสด",
         };
 
-        // 4. Deduct pointsUsed and award earned points based on net total
+        // 4. Deduct pointsUsed and award earned points based on net total, and add totalSpend
         const updatedMembers = targetOrder.memberCode
           ? state.members.map((m) =>
               m.code === targetOrder.memberCode
-                ? { ...m, points: Math.max(0, m.points - pointsUsed) + pointsEarned }
+                ? {
+                    ...m,
+                    points: Math.max(0, m.points - pointsUsed) + pointsEarned,
+                    totalSpend: (m.totalSpend || 0) + net,
+                  }
                 : m,
             )
           : state.members;
@@ -891,6 +910,11 @@ export function appReducer(state: AppState, action: Action): AppState {
           pr.id === action.prId ? { ...pr, status: "แปลงเป็น PO แล้ว", poId: action.newPO.id } : pr,
         ),
       };
+    case "requisitions/delete":
+      return {
+        ...state,
+        purchaseRequisitions: state.purchaseRequisitions.filter((pr) => pr.id !== action.id),
+      };
 
     /* purchasing payments & receipts */
     case "payments/addRequest":
@@ -1018,8 +1042,14 @@ export interface StoreActions {
   login: (username: string, password: string) => LoginResult;
   logout: () => void;
   switchRole: (role: RoleKey) => void;
-  // pos
+  // pos & members
   completeSale: (draft: Omit<Receipt, "id" | "createdAt" | "cashier">) => Receipt;
+  addMember: (data: {
+    name: string;
+    phone: string;
+    birthday?: string;
+    address?: string;
+  }) => Member;
   // orders
   approvePayment: (orderId: string) => void;
   rejectPayment: (orderId: string, note: string) => void;
@@ -1088,6 +1118,7 @@ export interface StoreActions {
     status: "อนุมัติ" | "ไม่อนุมัติ",
     rejectionReason?: string,
   ) => { ok: boolean };
+  deletePurchaseRequisition: (id: string) => { ok: boolean };
   convertPRToPO: (
     prId: string,
     warehouseId: string,
@@ -1150,6 +1181,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return receipt;
     },
     [state.sales.seq, state.session.user.name],
+  );
+
+  const addMember = useCallback<StoreActions["addMember"]>(
+    (data) => {
+      const numList = state.members
+        .map((m) => {
+          const match = m.code.match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        })
+        .filter((n) => !isNaN(n));
+      const nextNum = (numList.length > 0 ? Math.max(...numList) : state.members.length) + 1;
+      const code = `M${String(nextNum).padStart(4, "0")}`;
+
+      const newMember: Member = {
+        code,
+        name: data.name.trim(),
+        phone: data.phone.trim(),
+        points: 0,
+        birthday: data.birthday?.trim() || "",
+        address: data.address?.trim() || "",
+        joinedYear: new Date().getFullYear(),
+        totalSpend: 0,
+        tier: "ทั่วไป",
+      };
+
+      dispatch({ type: "members/add", member: newMember });
+      return newMember;
+    },
+    [state.members],
   );
 
   const addWarehouse = useCallback<StoreActions["addWarehouse"]>(
@@ -1577,6 +1637,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [state.session.user.name],
   );
 
+  const deletePurchaseRequisition = useCallback<StoreActions["deletePurchaseRequisition"]>(
+    (id) => {
+      dispatch({ type: "requisitions/delete", id });
+      return { ok: true };
+    },
+    [],
+  );
+
   const convertPRToPO = useCallback<StoreActions["convertPRToPO"]>(
     (prId, warehouseId, warehouseName, expectedDays = 3) => {
       const pr = state.purchaseRequisitions.find((p) => p.id === prId);
@@ -1753,15 +1821,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [state.agentReceipts, state.session.user.name],
   );
 
+  const login = useCallback<StoreActions["login"]>(
+    (username, password) => {
+      const normalized = username.trim().toLowerCase();
+      const user =
+        state.employees.find((u) => u.username.trim().toLowerCase() === normalized) ||
+        staffUsers.find((u) => u.username.trim().toLowerCase() === normalized);
+      if (!user || user.password !== password)
+        return { ok: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
+      dispatch({ type: "session/login", user });
+      return { ok: true, user };
+    },
+    [state.employees],
+  );
+
   const actions = useMemo<StoreActions>(
     () => ({
-      login: (username, password) => {
-        const user = staffUsers.find((u) => u.username === username.trim().toLowerCase());
-        if (!user || user.password !== password)
-          return { ok: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
-        dispatch({ type: "session/login", user });
-        return { ok: true, user };
-      },
+      login,
       logout: () => {
         if (typeof window !== "undefined") {
           try {
@@ -1774,6 +1850,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       switchRole: (role) => dispatch({ type: "session/switchRole", role }),
       completeSale,
+      addMember,
       approvePayment: (orderId) =>
         dispatch({ type: "orders/setStatus", orderId, status: "ชำระแล้ว", at: now(), note: "ตรวจสอบสลิปถูกต้อง" }),
       rejectPayment: (orderId, note) =>
@@ -1810,6 +1887,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteQuotation,
       addPurchaseRequisition,
       decidePurchaseRequisition,
+      deletePurchaseRequisition,
       convertPRToPO,
       requestPayment,
       decidePaymentRequest,
@@ -1855,6 +1933,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteQuotation,
       addPurchaseRequisition,
       decidePurchaseRequisition,
+      deletePurchaseRequisition,
       convertPRToPO,
       requestPayment,
       decidePaymentRequest,
@@ -1867,6 +1946,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateEmployee,
       resetEmployeePassword,
       archiveAgentReceipt,
+      login,
+      addMember,
     ],
   );
 
@@ -1975,7 +2056,8 @@ export const selectPaymentRequests = (s: AppState) => s.paymentRequests;
 export const selectAgentReceipts = (s: AppState) => s.agentReceipts;
 export const selectPendingPRs = (s: AppState) => s.purchaseRequisitions.filter((pr) => pr.status === "รออนุมัติ");
 export const selectApprovedPRs = (s: AppState) => s.purchaseRequisitions.filter((pr) => pr.status === "อนุมัติ");
-export const selectPendingPaymentRequests = (s: AppState) => s.paymentRequests.filter((p) => p.status === "รออนุมัติจ่าย");
+export const selectPendingPaymentRequests = (s: AppState) =>
+  s.paymentRequests.filter((p) => p.status === "รออนุมัติจ่าย" || p.status === "รออนุมัติจ่ายเงิน");
 
 /** Manager & Owner domain selectors (Round 3 Part 2) */
 export const selectPromotions = (s: AppState) => s.promotions;
@@ -1985,6 +2067,65 @@ export const selectPendingAgentReceipts = (s: AppState) =>
   s.agentReceipts.filter((r) => r.archiveStatus === "รอจัดเก็บ");
 export const selectArchivedAgentReceipts = (s: AppState) =>
   s.agentReceipts.filter((r) => r.archiveStatus === "จัดเก็บแล้ว");
+
+/**
+ * Dynamic 7-day sales combining historical baseline sales with runtime POS receipts
+ * and online orders (specifically updating "วันนี้").
+ */
+export function getDynamicSalesLast7Days(state?: {
+  sales?: { receipts?: Receipt[] };
+  orders?: OnlineOrder[];
+}) {
+  const receipts: Receipt[] = state?.sales?.receipts ?? [];
+  const orders: OnlineOrder[] = state?.orders ?? [];
+
+  // In-store POS receipts (no orderId attached)
+  const inStoreNew = receipts
+    .filter((r) => !r.orderId)
+    .reduce((sum, r) => sum + (r.net ?? 0), 0);
+
+  // Online orders approved / created
+  const onlineReceiptOrderIds = new Set(
+    receipts.filter((r) => !!r.orderId).map((r) => r.orderId!),
+  );
+  const onlineFromReceipts = receipts
+    .filter((r) => !!r.orderId)
+    .reduce((sum, r) => sum + (r.net ?? 0), 0);
+
+  const initialPaidOrderIds = new Set([
+    "OD-26110303",
+    "OD-26110205",
+    "OD-26110206",
+    "OD-26103008",
+    "OD-26102909",
+    "OD-26110305",
+  ]);
+
+  const additionalPaidOrders = orders.filter(
+    (o) =>
+      ["ชำระแล้ว", "กำลังเตรียม", "จัดส่งแล้ว", "ส่งสำเร็จ"].includes(o.status) &&
+      !initialPaidOrderIds.has(o.id) &&
+      !onlineReceiptOrderIds.has(o.id),
+  );
+
+  const onlineFromOrders = additionalPaidOrders.reduce(
+    (sum, o) => sum + (typeof (o as any).netTotal === "number" ? (o as any).netTotal : orderTotal(o)),
+    0,
+  );
+
+  const onlineNew = onlineFromReceipts + onlineFromOrders;
+
+  return (salesLast7Days ?? []).map((d) => {
+    if (d.day === "วันนี้") {
+      return {
+        ...d,
+        inStore: (d.inStore ?? 0) + inStoreNew,
+        online: (d.online ?? 0) + onlineNew,
+      };
+    }
+    return d;
+  });
+}
 
 export function useNavBadges() {
   const { state } = useStore();
