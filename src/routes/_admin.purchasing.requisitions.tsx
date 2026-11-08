@@ -539,8 +539,8 @@ function RequisitionsPage() {
 
       {/* Document View Dialog */}
       <Dialog open={Boolean(detailPR)} onOpenChange={(open) => !open && setDetailPR(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="border-b pb-3">
+        <DialogContent className="w-full max-w-[95vw] sm:max-w-2xl md:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-4 sm:p-6">
+          <DialogHeader className="border-b pb-3 shrink-0">
             <div className="flex items-center justify-between">
               <div>
                 <span className="font-bold text-base text-foreground">
@@ -552,19 +552,19 @@ function RequisitionsPage() {
               </div>
               {detailPR && <StatusBadge status={detailPR.status} />}
             </div>
-            <DialogDescription className="text-xs text-muted-foreground">
+            <DialogDescription className="text-xs text-muted-foreground break-words">
               ร้านรุ่งอรุณ มินิมาร์ท · เอกสารขอจัดซื้อภายในองค์กร
             </DialogDescription>
           </DialogHeader>
 
           {detailPR && (
-            <div className="space-y-4 pt-2 text-xs">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 space-y-4 pt-2 text-xs w-full min-w-0">
               {/* Document Header Info */}
-              <div className="grid grid-cols-2 gap-4 rounded-lg border bg-muted/20 p-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border bg-muted/20 p-3.5 w-full min-w-0">
                 <div className="space-y-1">
                   <div><span className="text-muted-foreground">ผู้จัดทำ/ขอซื้อ: </span><span className="font-semibold text-foreground">{detailPR.requestedBy}</span></div>
                   <div><span className="text-muted-foreground">วันที่สร้าง: </span><span className="text-foreground">{formatShortDate(detailPR.requestedAt)}</span></div>
-                  <div><span className="text-muted-foreground">เหตุผลความจำเป็น: </span><span className="text-foreground">{detailPR.reason}</span></div>
+                  <div><span className="text-muted-foreground">เหตุผลความจำเป็น: </span><span className="text-foreground break-words">{detailPR.reason}</span></div>
                   {detailPR.quotationNumber && (
                     <div><span className="text-muted-foreground">อ้างอิงใบเสนอราคา: </span><span className="font-mono font-medium text-foreground">{detailPR.quotationNumber}</span></div>
                   )}
@@ -581,11 +581,11 @@ function RequisitionsPage() {
                   {detailPR.rejectionReason && (
                     <div className="pt-1 border-t mt-1 text-danger">
                       <span className="font-semibold">เหตุผลที่ไม่อนุมัติ: </span>
-                      <span>{detailPR.rejectionReason}</span>
+                      <span className="break-words">{detailPR.rejectionReason}</span>
                     </div>
                   )}
                   {detailPR.poId && (
-                    <div className="col-span-2 pt-2 border-t mt-2 flex items-center justify-between bg-sun-50/70 p-2.5 rounded border border-sun-200">
+                    <div className="col-span-1 sm:col-span-2 pt-2 border-t mt-2 flex flex-wrap items-center justify-between gap-2 bg-sun-50/70 p-2.5 rounded border border-sun-200">
                       <div>
                         <div className="text-[11px] text-muted-foreground font-medium">
                           ใบสั่งซื้อที่ออกแล้ว (Generated PO Number)
@@ -614,10 +614,10 @@ function RequisitionsPage() {
               </div>
 
               {/* Items Table */}
-              <div>
+              <div className="w-full min-w-0">
                 <h4 className="font-semibold text-foreground mb-1.5">รายการสินค้าที่เสนอซื้อ</h4>
-                <div className="rounded-md border overflow-hidden">
-                  <table className="w-full text-xs">
+                <div className="rounded-md border overflow-x-auto w-full min-w-0">
+                  <table className="w-full text-xs min-w-[500px]">
                     <thead className="bg-muted/60 text-muted-foreground font-medium">
                       <tr>
                         <th className="py-2 px-3 text-left">ลำดับ</th>
@@ -660,7 +660,7 @@ function RequisitionsPage() {
               </div>
 
               {/* Action Buttons in Document View */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+              <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 border-t pt-3 w-full">
                 <div className="flex items-center gap-2">
                   {detailPR.status === "รออนุมัติ" && (
                     <>
@@ -718,10 +718,10 @@ function RequisitionsPage() {
         confirmLabel="ยืนยันการออก PO"
         onConfirm={handleConfirmConvert}
       >
-        <div className="space-y-3.5">
-          <div className="rounded-lg border bg-sun-50/60 p-3 text-xs">
-            <div className="font-semibold text-sun-900">บริษัทคู่ค้า: {detailPR?.companyName}</div>
-            <div className="text-muted-foreground mt-0.5">ตัวแทน: {detailPR?.agentName} · ยอดรวม ฿{detailPR?.totalAmount.toLocaleString()}</div>
+        <div className="space-y-3.5 w-full min-w-0">
+          <div className="rounded-lg border bg-sun-50/60 p-3 text-xs w-full max-w-full overflow-hidden break-words">
+            <div className="font-semibold text-sun-900 break-words">บริษัทคู่ค้า: {detailPR?.companyName}</div>
+            <div className="text-muted-foreground mt-0.5 break-words">ตัวแทน: {detailPR?.agentName} · ยอดรวม ฿{detailPR?.totalAmount.toLocaleString()}</div>
           </div>
 
           <Field label="โกดังปลายทางที่จัดเก็บสินค้า (นำเข้าคลัง)" required>
@@ -773,8 +773,8 @@ function RequisitionsPage() {
         confirmLabel="ส่งขออนุมัติ PR"
         onConfirm={handleSubmitCreatePR}
       >
-        <div className="space-y-4 max-h-[72vh] overflow-y-auto overflow-x-hidden pr-1 w-full max-w-full box-border">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-full box-border">
+        <div className="space-y-4 w-full min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full min-w-0">
             <Field label="บริษัทคู่ค้า" required error={errors.companyId}>
               <Select value={companyId} onValueChange={handleCompanyChange}>
                 <SelectTrigger>
