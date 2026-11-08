@@ -528,10 +528,10 @@ function ReorderPage() {
         confirmLabel="เพิ่มเข้ารายการสั่งซื้อ"
         onConfirm={handleSaveManualAdd}
       >
-        <div className="space-y-3.5">
+        <div className="space-y-3.5 w-full max-w-full box-border">
           <Field label="เลือกสินค้าที่ต้องการสั่งซื้อเพิ่ม">
             <Select value={manualProductId} onValueChange={setManualProductId}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full max-w-full">
                 <SelectValue placeholder="เลือกสินค้า" />
               </SelectTrigger>
               <SelectContent>
@@ -551,6 +551,7 @@ function ReorderPage() {
               value={manualQty}
               onChange={(e) => setManualQty(e.target.value)}
               placeholder="20"
+              className="w-full max-w-full"
             />
           </Field>
 
@@ -560,6 +561,7 @@ function ReorderPage() {
               value={manualReason}
               onChange={(e) => setManualReason(e.target.value)}
               placeholder="เช่น เตรียมรับเทศกาลปีใหม่, สินค้าขายดีผิดปกติ, รับโปรโมชันราคาพิเศษ"
+              className="w-full max-w-full"
             />
           </Field>
         </div>
@@ -576,25 +578,33 @@ function ReorderPage() {
         confirmLabel="สร้างใบเสนอซื้อทันที"
         onConfirm={handleCreatePR}
       >
-        <div className="space-y-4">
-          <div className="rounded-lg border bg-sun-50/50 p-3 text-xs text-sun-900">
-            <div className="font-semibold mb-1">
-              รายการที่เลือกสั่งซื้อ:{" "}
-              {selectedIds.length > 0 ? selectedIds.length : reorderList.length} รายการ
+        <div className="space-y-4 w-full max-w-full box-border">
+          <div className="rounded-lg border bg-sun-50/50 p-3 text-xs text-sun-900 w-full max-w-full overflow-hidden break-words space-y-2">
+            <div className="font-semibold flex items-center justify-between">
+              <span>รายการที่เลือกสั่งซื้อ:</span>
+              <span className="font-bold text-sun-800 bg-sun-100 px-2 py-0.5 rounded-full text-[11px]">
+                {selectedIds.length > 0 ? selectedIds.length : reorderList.length} รายการ
+              </span>
             </div>
-            <div className="text-muted-foreground truncate">
+            <div className="flex flex-wrap gap-1.5 w-full max-w-full break-words whitespace-normal text-xs max-h-36 overflow-y-auto pr-0.5">
               {(selectedIds.length > 0
                 ? reorderList.filter((i) => selectedIds.includes(i.id))
                 : reorderList
-              )
-                .map((i) => `${i.name} (+${i.suggestedQty})`)
-                .join(", ")}
+              ).map((i) => (
+                <span
+                  key={i.id}
+                  className="inline-flex items-center px-2 py-0.5 rounded bg-white/90 border border-sun-200 text-sun-900 text-[11px] break-words whitespace-normal shadow-2xs"
+                >
+                  <span className="font-medium">{i.name}</span>
+                  <span className="ml-1 text-sun-700 font-semibold">(+{i.suggestedQty})</span>
+                </span>
+              ))}
             </div>
           </div>
 
           <Field label="บริษัทคู่ค้า (ซัพพลายเออร์)" required>
             <Select value={targetCompanyId} onValueChange={handleTargetCompanyChange}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full max-w-full">
                 <SelectValue placeholder="เลือกบริษัทคู่ค้า" />
               </SelectTrigger>
               <SelectContent>
@@ -609,7 +619,7 @@ function ReorderPage() {
 
           <Field label="ตัวแทนจำหน่ายที่รับผิดชอบ" required>
             <Select value={targetAgentId} onValueChange={setTargetAgentId}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full max-w-full">
                 <SelectValue placeholder="เลือกตัวแทนจำหน่าย" />
               </SelectTrigger>
               <SelectContent>
@@ -626,7 +636,7 @@ function ReorderPage() {
 
           <Field label="อ้างอิงใบเสนอราคา (ถ้ามี)">
             <Select value={targetQuotationId} onValueChange={setTargetQuotationId}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full max-w-full">
                 <SelectValue placeholder="เลือกใบเสนอราคาเพื่อดึงราคาต่อหน่วย" />
               </SelectTrigger>
               <SelectContent>
@@ -647,6 +657,7 @@ function ReorderPage() {
               value={prReason}
               onChange={(e) => setPrReason(e.target.value)}
               placeholder="ระบุเหตุผลความจำเป็นเพื่อให้ผู้จัดการพิจารณาอนุมัติ"
+              className="w-full max-w-full"
             />
           </Field>
         </div>

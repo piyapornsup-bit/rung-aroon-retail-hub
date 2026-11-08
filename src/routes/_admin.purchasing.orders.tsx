@@ -638,10 +638,10 @@ function PurchaseOrdersPage() {
         confirmLabel="ยืนยันการออก PO"
         onConfirm={handleGeneratePO}
       >
-        <div className="space-y-4">
+        <div className="space-y-4 w-full max-w-full box-border">
           <Field label="เลือกใบเสนอซื้อ (PR) ที่อนุมัติแล้ว" required>
             <Select value={selectedPRId} onValueChange={setSelectedPRId}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full max-w-full">
                 <SelectValue placeholder="เลือกใบเสนอซื้อ" />
               </SelectTrigger>
               <SelectContent>
@@ -659,8 +659,8 @@ function PurchaseOrdersPage() {
             const pr = approvedPRs.find((p) => p.id === selectedPRId);
             if (!pr) return null;
             return (
-              <div className="space-y-3">
-                <div className="rounded-lg border bg-muted/20 p-3 text-xs space-y-1.5">
+              <div className="space-y-3 w-full max-w-full box-border overflow-hidden">
+                <div className="rounded-lg border bg-muted/20 p-3 text-xs space-y-1.5 w-full max-w-full overflow-hidden break-words">
                   <div className="flex items-center justify-between">
                     <div className="font-semibold text-foreground flex items-center gap-1.5">
                       <Building2 className="size-3.5 text-sun-600" />
@@ -670,7 +670,7 @@ function PurchaseOrdersPage() {
                       Ref: {pr.prNumber}
                     </Badge>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-muted-foreground pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-muted-foreground pt-1 w-full max-w-full">
                     <div>
                       <span>ตัวแทนผู้ประสานงาน: </span>
                       <strong className="text-foreground font-medium">{pr.agentName}</strong>
@@ -681,20 +681,20 @@ function PurchaseOrdersPage() {
                         <strong className="text-foreground font-mono">{pr.quotationNumber}</strong>
                       </div>
                     )}
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <span>เหตุผลการจัดซื้อ: </span>
-                      <span className="text-foreground">{pr.reason}</span>
+                      <span className="text-foreground break-words">{pr.reason}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Items Auto-filled preview */}
-                <div>
+                <div className="w-full max-w-full overflow-hidden">
                   <div className="flex items-center justify-between text-xs font-semibold text-foreground mb-1.5">
                     <span>รายการสินค้าที่จะสั่งซื้อ (ดึงจาก PR อัตโนมัติ {pr.lines.length} รายการ)</span>
                     <span className="text-sun-700 font-bold">รวม ฿{pr.totalAmount.toLocaleString()}</span>
                   </div>
-                  <div className="rounded-md border overflow-hidden max-h-48 overflow-y-auto">
+                  <div className="rounded-md border overflow-hidden max-h-48 overflow-y-auto w-full max-w-full">
                     <table className="w-full text-xs">
                       <thead className="bg-muted/80 text-foreground sticky top-0 font-medium">
                         <tr>
@@ -732,7 +732,7 @@ function PurchaseOrdersPage() {
 
           <Field label="โกดังปลายทางสำหรับรับมอบสินค้า" required>
             <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full max-w-full">
                 <SelectValue placeholder="เลือกโกดังปลายทาง" />
               </SelectTrigger>
               <SelectContent>
@@ -752,6 +752,7 @@ function PurchaseOrdersPage() {
               value={expectedDays}
               onChange={(e) => setExpectedDays(e.target.value)}
               placeholder="3"
+              className="w-full max-w-full"
             />
           </Field>
         </div>

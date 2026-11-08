@@ -68,14 +68,14 @@ export function FormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("rounded-lg sm:max-w-lg", className)}>
-        <form onSubmit={handleFormSubmit} noValidate className="space-y-5">
+      <DialogContent className={cn("max-w-lg w-full max-h-[90vh] overflow-y-auto overflow-x-hidden p-6 rounded-lg", className)}>
+        <form onSubmit={handleFormSubmit} noValidate className="space-y-5 w-full max-w-full box-border">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
-            {description && <DialogDescription>{description}</DialogDescription>}
+            {description && <DialogDescription className="break-words">{description}</DialogDescription>}
           </DialogHeader>
-          <div className="space-y-4">{children}</div>
-          <DialogFooter>
+          <div className="space-y-4 w-full max-w-full box-border">{children}</div>
+          <DialogFooter className="flex justify-end gap-2 pt-4 w-full sm:space-x-0">
             <Button type="button" variant="outline" onClick={() => onOpenChange?.(false)}>
               {cancelLabel}
             </Button>
@@ -109,12 +109,12 @@ export function Field({
   className?: string;
 }) {
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
+    <div className={cn("space-y-1.5 w-full max-w-full box-border", className)}>
+      <label htmlFor={htmlFor} className="text-sm font-medium text-foreground block">
         {label}
         {required && <span className="text-danger"> *</span>}
       </label>
-      {children}
+      <div className="w-full max-w-full box-border">{children}</div>
       {error ? (
         <p className="text-sm text-danger" role="alert">
           {error}

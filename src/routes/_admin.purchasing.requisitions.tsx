@@ -773,8 +773,8 @@ function RequisitionsPage() {
         confirmLabel="ส่งขออนุมัติ PR"
         onConfirm={handleSubmitCreatePR}
       >
-        <div className="space-y-4 max-h-[72vh] overflow-y-auto pr-1">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-4 max-h-[72vh] overflow-y-auto overflow-x-hidden pr-1 w-full max-w-full box-border">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-full box-border">
             <Field label="บริษัทคู่ค้า" required error={errors.companyId}>
               <Select value={companyId} onValueChange={handleCompanyChange}>
                 <SelectTrigger>
