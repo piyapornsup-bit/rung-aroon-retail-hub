@@ -1115,7 +1115,7 @@ export interface StoreActions {
   ) => PurchaseRequisition;
   decidePurchaseRequisition: (
     id: string,
-    status: "อนุมัติ" | "ไม่อนุมัติ",
+    status: "อนุมัติ" | "ไม่อนุมัติ" | "APPROVED" | "REJECTED",
     rejectionReason?: string,
   ) => { ok: boolean };
   deletePurchaseRequisition: (id: string) => { ok: boolean };
@@ -1615,6 +1615,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         requestedBy: state.session.user.name,
         status: "รออนุมัติ",
         ...data,
+        lines: (data.lines || []).map((l, idx) => ({
+          ...l,
+          id: l.id || `PRL-${prNumber}-${idx + 1}`,
+        })),
       };
       dispatch({ type: "requisitions/add", pr });
       return pr;
@@ -1624,10 +1628,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const decidePurchaseRequisition = useCallback<StoreActions["decidePurchaseRequisition"]>(
     (id, status, rejectionReason) => {
+      const normalizedStatus =
+        status === "APPROVED" ? "อนุมัติ" : status === "REJECTED" ? "ไม่อนุมัติ" : status;
       dispatch({
         type: "requisitions/updateStatus",
         id,
-        status,
+        status: normalizedStatus,
         rejectionReason,
         at: now(),
         by: state.session.user.name,
@@ -1649,7 +1655,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (prId, warehouseId, warehouseName, expectedDays = 3) => {
       const pr = state.purchaseRequisitions.find((p) => p.id === prId);
       if (!pr) return { ok: false, error: "ไม่พบใบเสนอซื้อนี้" };
-      if (pr.status !== "อนุมัติ") return { ok: false, error: "สร้าง PO ได้เฉพาะใบเสนอซื้อที่ผ่านการอนุมัติแล้วเท่านั้น" };
+      if (pr.status !== "อนุมัติ" && pr.status !== "APPROVED") {
+        return { ok: false, error: "สร้าง PO ได้เฉพาะใบเสนอซื้อที่ผ่านการอนุมัติแล้วเท่านั้น" };
+      }
+      if (pr.poId || pr.status === "แปลงเป็น PO แล้ว" || pr.status === "ORDERED" || pr.status === "สั่งซื้อแล้ว") {
+        return { ok: false, error: "ใบเสนอซื้อนี้ถูกนำไปสร้างใบสั่งซื้อ (PO) แล้ว" };
+      }
 
       const poSeq = state.purchaseOrders.length + 1;
       const poId = `PO-2611-${poSeq.toString().padStart(3, "0")}`;
@@ -1664,23 +1675,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         agentName: pr.agentName,
         prId: pr.id,
         prNumber: pr.prNumber,
+        pr_id: pr.id,
+        requisition_id: pr.id,
         warehouseId,
         warehouseName,
         orderDate: now(),
         expectedDate,
         status: "รอรับสินค้า",
-        lines: pr.lines.map((l) => ({
-          productId: l.productId,
-          sku: l.sku,
-          name: l.name,
-          unit: l.unit,
-          qty: l.qty,
-          costPrice: l.unitPrice,
-          total: l.total,
-          receivedQty: 0,
-          warehouseId,
-          warehouseName,
-        })),
+        lines: pr.lines.map((l, idx) => {
+          const prItemId = l.id || `PRL-${pr.id}-${idx + 1}`;
+          return {
+            id: `POL-${poId}-${idx + 1}`,
+            prLineId: prItemId,
+            prItemId: prItemId,
+            pr_item_id: prItemId,
+            productId: l.productId,
+            sku: l.sku,
+            name: l.name,
+            unit: l.unit,
+            qty: l.qty,
+            costPrice: l.unitPrice,
+            total: l.total,
+            receivedQty: 0,
+            warehouseId,
+            warehouseName,
+          };
+        }),
         totalAmount: pr.totalAmount,
         createdBy: state.session.user.name,
         note: `ออกใบสั่งซื้ออัตโนมัติจาก ${pr.prNumber} (${pr.reason})`,
@@ -2054,8 +2074,17 @@ export const selectQuotations = (s: AppState) => s.quotations;
 export const selectPurchaseRequisitions = (s: AppState) => s.purchaseRequisitions;
 export const selectPaymentRequests = (s: AppState) => s.paymentRequests;
 export const selectAgentReceipts = (s: AppState) => s.agentReceipts;
-export const selectPendingPRs = (s: AppState) => s.purchaseRequisitions.filter((pr) => pr.status === "รออนุมัติ");
-export const selectApprovedPRs = (s: AppState) => s.purchaseRequisitions.filter((pr) => pr.status === "อนุมัติ");
+export const selectPendingPRs = (s: AppState) =>
+  s.purchaseRequisitions.filter((pr) => pr.status === "รออนุมัติ" || pr.status === "PENDING_APPROVAL");
+export const selectApprovedPRs = (s: AppState) =>
+  s.purchaseRequisitions.filter(
+    (pr) =>
+      (pr.status === "อนุมัติ" || pr.status === "APPROVED") &&
+      !pr.poId &&
+      pr.status !== "แปลงเป็น PO แล้ว" &&
+      pr.status !== "ORDERED" &&
+      pr.status !== "สั่งซื้อแล้ว",
+  );
 export const selectPendingPaymentRequests = (s: AppState) =>
   s.paymentRequests.filter((p) => p.status === "รออนุมัติจ่าย" || p.status === "รออนุมัติจ่ายเงิน");
 

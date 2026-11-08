@@ -675,6 +675,10 @@ export const PO_STATUSES = [
 export type POStatus = (typeof PO_STATUSES)[number];
 
 export interface PurchaseOrderLine {
+  id?: string;
+  prLineId?: string;
+  prItemId?: string;
+  pr_item_id?: string;
   productId: string;
   sku: string;
   name: string;
@@ -720,6 +724,8 @@ export interface PurchaseOrder {
   // Linked purchasing data (Round 3)
   prId?: string;
   prNumber?: string;
+  pr_id?: string;
+  requisition_id?: string;
   companyId?: string;
   agentId?: string;
   agentName?: string;
@@ -740,6 +746,8 @@ export const purchaseOrders: PurchaseOrder[] = [
     agentPhone: "081-456-7890",
     prId: "PR-2611-004",
     prNumber: "PR-2611-004",
+    pr_id: "PR-2611-004",
+    requisition_id: "PR-2611-004",
     warehouseId: "WH-02",
     warehouseName: "โกดัง 2 (ศิลา)",
     orderDate: minutesAgo(1440),
@@ -749,9 +757,9 @@ export const purchaseOrders: PurchaseOrder[] = [
     creditTermDays: 30,
     paymentStatus: "อนุมัติจ่ายแล้ว",
     lines: [
-      { productId: "P17", sku: "NO-001", name: "มาม่า ต้มยำกุ้ง", unit: "ซอง", qty: 120, costPrice: 5.2, total: 624, receivedQty: 0 },
-      { productId: "P18", sku: "NO-002", name: "ไวไว ปรุงสำเร็จ", unit: "ซอง", qty: 100, costPrice: 4.5, total: 450, receivedQty: 0 },
-      { productId: "P20", sku: "NO-004", name: "มาม่าคัพ ต้มยำ", unit: "ถ้วย", qty: 48, costPrice: 11.5, total: 552, receivedQty: 0 },
+      { id: "POL-001-1", pr_item_id: "PRL-2611-004-1", prItemId: "PRL-2611-004-1", prLineId: "PRL-2611-004-1", productId: "P17", sku: "NO-001", name: "มาม่า ต้มยำกุ้ง", unit: "ซอง", qty: 120, costPrice: 5.2, total: 624, receivedQty: 0 },
+      { id: "POL-001-2", pr_item_id: "PRL-2611-004-2", prItemId: "PRL-2611-004-2", prLineId: "PRL-2611-004-2", productId: "P18", sku: "NO-002", name: "ไวไว ปรุงสำเร็จ", unit: "ซอง", qty: 100, costPrice: 4.5, total: 450, receivedQty: 0 },
+      { id: "POL-001-3", pr_item_id: "PRL-2611-004-3", prItemId: "PRL-2611-004-3", prLineId: "PRL-2611-004-3", productId: "P20", sku: "NO-004", name: "มาม่าคัพ ต้มยำ", unit: "ถ้วย", qty: 48, costPrice: 11.5, total: 552, receivedQty: 0 },
     ],
     totalAmount: 1626,
     createdBy: "วรรณา คุ้มค่า",
@@ -1200,9 +1208,19 @@ export const quotations: Quotation[] = [
 
 /* ───────────────────────── Purchase Requisitions (ใบเสนอซื้อ - PR) ───────────────────────── */
 
-export type PRStatus = "รออนุมัติ" | "อนุมัติ" | "ไม่อนุมัติ" | "แปลงเป็น PO แล้ว";
+export type PRStatus =
+  | "รออนุมัติ"
+  | "อนุมัติ"
+  | "ไม่อนุมัติ"
+  | "แปลงเป็น PO แล้ว"
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "ORDERED"
+  | "สั่งซื้อแล้ว";
 
 export interface PurchaseRequisitionLine {
+  id?: string;
   productId: string;
   sku: string;
   name: string;
@@ -1231,6 +1249,7 @@ export interface PurchaseRequisition {
   approvedAt?: string;
   rejectionReason?: string;
   poId?: string;
+  orderedAt?: string;
 }
 
 export const purchaseRequisitions: PurchaseRequisition[] = [
@@ -1246,9 +1265,9 @@ export const purchaseRequisitions: PurchaseRequisition[] = [
     reason: "สินค้าถึงจุดสั่งซื้อด่วนตามแจ้งเตือนคลังสินค้า (มาม่า, ไวไว, สบู่นกแก้ว)",
     status: "รออนุมัติ",
     lines: [
-      { productId: "P17", sku: "NO-001", name: "มาม่า ต้มยำกุ้ง", unit: "ซอง", qty: 120, unitPrice: 5.2, total: 624 },
-      { productId: "P18", sku: "NO-002", name: "ไวไว ปรุงสำเร็จ", unit: "ซอง", qty: 100, unitPrice: 4.5, total: 450 },
-      { productId: "P05", sku: "SP-001", name: "สบู่นกแก้ว 105 ก.", unit: "ก้อน", qty: 50, unitPrice: 16.0, total: 800 },
+      { id: "PRL-2611-001-1", productId: "P17", sku: "NO-001", name: "มาม่า ต้มยำกุ้ง", unit: "ซอง", qty: 120, unitPrice: 5.2, total: 624 },
+      { id: "PRL-2611-001-2", productId: "P18", sku: "NO-002", name: "ไวไว ปรุงสำเร็จ", unit: "ซอง", qty: 100, unitPrice: 4.5, total: 450 },
+      { id: "PRL-2611-001-3", productId: "P05", sku: "SP-001", name: "สบู่นกแก้ว 105 ก.", unit: "ก้อน", qty: 50, unitPrice: 16.0, total: 800 },
     ],
     totalAmount: 1874,
     requestedBy: "วรรณา คุ้มค่า",
@@ -1266,8 +1285,8 @@ export const purchaseRequisitions: PurchaseRequisition[] = [
     reason: "สต็อกสบู่เหลวลักส์และแชมพูเหลือน้อย สั่งซื้อเติมสต็อกสำหรับโปรโมชันปลายปี",
     status: "อนุมัติ",
     lines: [
-      { productId: "P06", sku: "SP-002", name: "สบู่เหลวลักส์ 450 มล.", unit: "ขวด", qty: 24, unitPrice: 95.0, total: 2280 },
-      { productId: "P09", sku: "SH-002", name: "แชมพูเฮดแอนด์โชว์เดอร์ 170 มล.", unit: "ขวด", qty: 24, unitPrice: 72.0, total: 1728 },
+      { id: "PRL-2611-002-1", productId: "P06", sku: "SP-002", name: "สบู่เหลวลักส์ 450 มล.", unit: "ขวด", qty: 24, unitPrice: 95.0, total: 2280 },
+      { id: "PRL-2611-002-2", productId: "P09", sku: "SH-002", name: "แชมพูเฮดแอนด์โชว์เดอร์ 170 มล.", unit: "ขวด", qty: 24, unitPrice: 72.0, total: 1728 },
     ],
     totalAmount: 4008,
     requestedBy: "วรรณา คุ้มค่า",
@@ -1287,8 +1306,8 @@ export const purchaseRequisitions: PurchaseRequisition[] = [
     reason: "สั่งซื้อนมยูเอชทีจำนวนมากเกินโควตารอบสัปดาห์",
     status: "ไม่อนุมัติ",
     lines: [
-      { productId: "P23", sku: "MK-003", name: "นมโฟร์โมสต์ ช็อกโกแลต", unit: "กล่อง", qty: 500, unitPrice: 10.5, total: 5250 },
-      { productId: "P21", sku: "MK-001", name: "นมจืดไทย-เดนมาร์ค 200 มล.", unit: "กล่อง", qty: 300, unitPrice: 10.8, total: 3240 },
+      { id: "PRL-2611-003-1", productId: "P23", sku: "MK-003", name: "นมโฟร์โมสต์ ช็อกโกแลต", unit: "กล่อง", qty: 500, unitPrice: 10.5, total: 5250 },
+      { id: "PRL-2611-003-2", productId: "P21", sku: "MK-001", name: "นมจืดไทย-เดนมาร์ค 200 มล.", unit: "กล่อง", qty: 300, unitPrice: 10.8, total: 3240 },
     ],
     totalAmount: 8490,
     requestedBy: "วรรณา คุ้มค่า",
@@ -1309,9 +1328,9 @@ export const purchaseRequisitions: PurchaseRequisition[] = [
     reason: "เติมสต็อกบะหมี่กึ่งสำเร็จรูปและของใช้ประจำสัปดาห์ตามแผนงาน",
     status: "แปลงเป็น PO แล้ว",
     lines: [
-      { productId: "P17", sku: "NO-001", name: "มาม่า ต้มยำกุ้ง", unit: "ซอง", qty: 120, unitPrice: 5.2, total: 624 },
-      { productId: "P18", sku: "NO-002", name: "ไวไว ปรุงสำเร็จ", unit: "ซอง", qty: 100, unitPrice: 4.5, total: 450 },
-      { productId: "P20", sku: "NO-004", name: "มาม่าคัพ ต้มยำ", unit: "ถ้วย", qty: 48, unitPrice: 11.5, total: 552 },
+      { id: "PRL-2611-004-1", productId: "P17", sku: "NO-001", name: "มาม่า ต้มยำกุ้ง", unit: "ซอง", qty: 120, unitPrice: 5.2, total: 624 },
+      { id: "PRL-2611-004-2", productId: "P18", sku: "NO-002", name: "ไวไว ปรุงสำเร็จ", unit: "ซอง", qty: 100, unitPrice: 4.5, total: 450 },
+      { id: "PRL-2611-004-3", productId: "P20", sku: "NO-004", name: "มาม่าคัพ ต้มยำ", unit: "ถ้วย", qty: 48, unitPrice: 11.5, total: 552 },
     ],
     totalAmount: 1626,
     requestedBy: "วรรณา คุ้มค่า",

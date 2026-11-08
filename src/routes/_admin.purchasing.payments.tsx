@@ -611,6 +611,8 @@ function PaymentsPage() {
         onOpenChange={setCreateOpen}
         title="สร้างคำขออนุมัติจ่ายเงินตามใบสั่งซื้อ"
         description="เลือกใบสั่งซื้อ (PO) กำหนดเงื่อนไขเงินสดหรือเงินเชื่อ และแนบเอกสารใบเสร็จตัวแทน"
+        submitLabel="ส่งขออนุมัติจ่ายเงิน"
+        onSubmit={handleSavePaymentRequest}
         confirmLabel="ส่งขออนุมัติจ่ายเงิน"
         onConfirm={handleSavePaymentRequest}
       >
@@ -802,6 +804,8 @@ function PaymentsPage() {
         onOpenChange={setUploadReceiptOpen}
         title={`อัปโหลดใบเสร็จรับเงิน: ${targetReqForUpload?.id}`}
         description="แนบเอกสารหลักฐานใบเสร็จหรือใบกำกับภาษีที่ได้รับจากตัวแทนจำหน่าย"
+        submitLabel="บันทึกเอกสาร"
+        onSubmit={handleSaveUploadReceipt}
         confirmLabel="บันทึกเอกสาร"
         onConfirm={handleSaveUploadReceipt}
       >

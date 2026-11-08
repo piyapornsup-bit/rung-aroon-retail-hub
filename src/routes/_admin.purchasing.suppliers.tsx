@@ -551,6 +551,8 @@ function SuppliersPage() {
         onOpenChange={setCompanyDialogOpen}
         title={editingCompany ? `แก้ไขบริษัท: ${editingCompany.name}` : "เพิ่มบริษัทคู่ค้าใหม่"}
         description="กรอกข้อมูลบริษัทคู่ค้า เลขประจำตัวผู้เสียภาษี และหมวดหมู่สินค้าที่จัดจำหน่าย"
+        submitLabel={editingCompany ? "บันทึกการแก้ไข" : "เพิ่มบริษัท"}
+        onSubmit={handleSaveCompany}
         confirmLabel={editingCompany ? "บันทึกการแก้ไข" : "เพิ่มบริษัท"}
         onConfirm={handleSaveCompany}
       >
@@ -659,6 +661,8 @@ function SuppliersPage() {
         onOpenChange={setAgentDialogOpen}
         title={editingAgent ? `แก้ไขข้อมูลตัวแทน: ${editingAgent.name}` : `เพิ่มตัวแทนจำหน่าย: ${selectedCompany?.name}`}
         description="กรอกข้อมูลตัวแทนจำหน่าย เบอร์โทรศัพท์ และ LINE สำหรับการติดต่อประสานงานจัดซื้อ"
+        submitLabel={editingAgent ? "บันทึกการแก้ไข" : "เพิ่มตัวแทน"}
+        onSubmit={handleSaveAgent}
         confirmLabel={editingAgent ? "บันทึกการแก้ไข" : "เพิ่มตัวแทน"}
         onConfirm={handleSaveAgent}
       >

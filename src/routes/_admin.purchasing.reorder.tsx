@@ -185,7 +185,7 @@ function ReorderPage() {
     const product = state.catalog.products.find((p) => p.id === manualProductId);
     if (!product) {
       toast.error("กรุณาเลือกสินค้า");
-      return;
+      return false;
     }
     const qty = parseInt(manualQty) || 10;
     const wh = selectWarehouseForCategory(state, product.category);
@@ -209,6 +209,7 @@ function ReorderPage() {
     setSelectedIds((prev) => [...prev, newItem.id]);
     toast.success(`เพิ่มสินค้า "${product.name}" ในรายการสั่งซื้อแล้ว`);
     setManualOpen(false);
+    return true;
   };
 
   // Open PR Creator
@@ -251,13 +252,18 @@ function ReorderPage() {
     const agent = state.supplierAgents.find((a) => a.id === targetAgentId);
     if (!company || !agent) {
       toast.error("กรุณาระบุบริษัทและตัวแทนจำหน่าย");
-      return;
+      return false;
     }
 
     const itemsToOrder =
       selectedIds.length > 0
         ? reorderList.filter((i) => selectedIds.includes(i.id))
         : reorderList;
+
+    if (itemsToOrder.length === 0) {
+      toast.error("ไม่มีรายการสินค้าให้สร้างใบเสนอซื้อ");
+      return false;
+    }
 
     const quotation = state.quotations.find((q) => q.id === targetQuotationId);
 
@@ -296,7 +302,10 @@ function ReorderPage() {
     toast.success(`สร้างใบเสนอซื้อ ${newPR.prNumber} สำเร็จ`);
     setCreatePROpen(false);
     navigate({ to: "/purchasing/requisitions" });
+    return true;
   };
+
+  const handleCreatePR = handleGeneratePR;
 
   // Metrics
   const zeroStockCount = reorderList.filter((i) => i.currentStock === 0).length;
@@ -514,6 +523,8 @@ function ReorderPage() {
         onOpenChange={setManualOpen}
         title="เพิ่มสินค้านอกเกณฑ์ด้วยตนเอง"
         description="เลือกสินค้าที่สต็อกยังไม่ถึงจุดสั่งซื้อ เพื่อนำเข้ามาเตรียมออกใบเสนอซื้อล่วงหน้า"
+        submitLabel="เพิ่มเข้ารายการสั่งซื้อ"
+        onSubmit={handleSaveManualAdd}
         confirmLabel="เพิ่มเข้ารายการสั่งซื้อ"
         onConfirm={handleSaveManualAdd}
       >
@@ -560,8 +571,10 @@ function ReorderPage() {
         onOpenChange={setCreatePROpen}
         title="สร้างใบเสนอซื้อ (PR) จากรายการที่เลือก"
         description="ส่งต่อรายการสินค้าที่ถึงจุดสั่งซื้อเข้าสู่กระบวนการขออนุมัติจากผู้จัดการร้าน"
+        submitLabel="สร้างใบเสนอซื้อทันที"
+        onSubmit={handleCreatePR}
         confirmLabel="สร้างใบเสนอซื้อทันที"
-        onConfirm={handleGeneratePR}
+        onConfirm={handleCreatePR}
       >
         <div className="space-y-4">
           <div className="rounded-lg border bg-sun-50/50 p-3 text-xs text-sun-900">

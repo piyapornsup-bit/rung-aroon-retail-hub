@@ -70,6 +70,11 @@ export const STOCK_STATUS_TONE: Record<string, Tone> = {
   ต้องส่งคืนตัวแทน: "red",
   // Purchasing domain statuses
   "แปลงเป็น PO แล้ว": "blue",
+  "สั่งซื้อแล้ว": "blue",
+  ORDERED: "blue",
+  PENDING_APPROVAL: "amber",
+  APPROVED: "green",
+  REJECTED: "red",
   รออนุมัติจ่าย: "amber",
   รออนุมัติจ่ายเงิน: "amber",
   อนุมัติจ่ายแล้ว: "cyan",

@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatNumber, formatShortDate } from "@/lib/format";
 import { useStore, selectPendingReceivingPOs, selectCompletedPOs, selectApprovedPRs } from "@/lib/store";
-import type { PurchaseOrder } from "@/lib/mock-data";
+import type { PurchaseOrder, PurchaseRequisition } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/_admin/purchasing/orders")({
   head: () => ({
@@ -66,6 +66,7 @@ function PurchaseOrdersPage() {
 
   const [activeTab, setActiveTab] = useState<string>("all");
   const [detailPO, setDetailPO] = useState<PurchaseOrder | null>(null);
+  const [viewLinkedPR, setViewLinkedPR] = useState<PurchaseRequisition | null>(null);
 
   // Create PO from Approved PR Dialog State
   const [createOpen, setCreateOpen] = useState(false);
@@ -89,7 +90,7 @@ function PurchaseOrdersPage() {
   const handleGeneratePO = () => {
     if (!selectedPRId) {
       toast.error("กรุณาเลือกใบเสนอซื้อที่อนุมัติแล้ว");
-      return;
+      return false;
     }
     const targetWH = state.warehouses.find((w) => w.id === selectedWarehouseId);
     const whName = targetWH ? targetWH.name : "โกดังหลัก (หลังร้าน)";
@@ -97,14 +98,19 @@ function PurchaseOrdersPage() {
     const res = actions.convertPRToPO(selectedPRId, selectedWarehouseId, whName, parseInt(expectedDays) || 3);
     if (!res.ok) {
       toast.error(res.error ?? "ไม่สามารถสร้างใบสั่งซื้อได้");
+      return false;
     } else {
       toast.success(`ออกใบสั่งซื้อ ${res.po?.poNumber} สำเร็จ เชื่อมต่อไปยังหน้าตรวจรับสินค้าเรียบร้อย`);
       setCreateOpen(false);
       if (res.po) {
         setDetailPO(res.po);
       }
+      return true;
     }
   };
+
+  const handleSubmitCreatePO = handleGeneratePO;
+  const handleCreatePO = handleGeneratePO;
 
   // Filtered POs
   const filteredPOs = useMemo(() => {
@@ -131,12 +137,34 @@ function PurchaseOrdersPage() {
     {
       id: "prRef",
       header: "อ้างอิง PR",
-      accessor: (p) => (
-        <span className="font-mono text-xs text-muted-foreground">
-          {p.prNumber ?? p.prId ?? "-"}
-        </span>
-      ),
-      className: "w-28",
+      accessor: (p) => {
+        const prId = p.prId || p.pr_id || p.requisition_id;
+        const prNum = p.prNumber ?? prId;
+        if (!prNum) return <span className="font-mono text-xs text-muted-foreground">-</span>;
+        const targetPR = state.purchaseRequisitions.find(
+          (r) => (prId && r.id === prId) || (prNum && r.prNumber === prNum),
+        );
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-1.5 font-mono text-xs font-semibold text-sun-700 hover:text-sun-800 hover:bg-sun-50 flex items-center gap-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (targetPR) {
+                setViewLinkedPR(targetPR);
+              } else {
+                toast.info(`อ้างอิงใบเสนอซื้อเลขที่ ${prNum}`);
+              }
+            }}
+            title="คลิกเพื่อดูรายละเอียดใบเสนอซื้อ (PR)"
+          >
+            <FileText className="size-3" />
+            <span>{prNum}</span>
+          </Button>
+        );
+      },
+      className: "w-32",
     },
     {
       id: "supplier",
@@ -361,7 +389,31 @@ function PurchaseOrdersPage() {
                     สถานที่จัดส่งมอบสินค้า (DELIVERY TO)
                   </div>
                   <div className="font-bold text-sm text-foreground">{detailPO.warehouseName}</div>
-                  <div><span className="text-muted-foreground">อ้างอิงใบเสนอซื้อ: </span><span className="font-mono">{detailPO.prNumber ?? detailPO.prId ?? "-"}</span></div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">อ้างอิงใบเสนอซื้อ: </span>
+                    <span className="font-mono font-semibold">{detailPO.prNumber ?? detailPO.prId ?? "-"}</span>
+                    {(() => {
+                      const prId = detailPO.prId || detailPO.pr_id || detailPO.requisition_id;
+                      const prNum = detailPO.prNumber ?? prId;
+                      const targetPR = state.purchaseRequisitions.find(
+                        (r) => (prId && r.id === prId) || (prNum && r.prNumber === prNum),
+                      );
+                      if (targetPR) {
+                        return (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[11px] gap-1 text-sun-700 hover:bg-sun-50 border-sun-200"
+                            onClick={() => setViewLinkedPR(targetPR)}
+                          >
+                            <Eye className="size-3" />
+                            <span>ดูรายละเอียด PR</span>
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
                   <div><span className="text-muted-foreground">ผู้จัดทำเอกสาร: </span><span>{detailPO.createdBy}</span></div>
                   {detailPO.note && <div><span className="text-muted-foreground">หมายเหตุ: </span><span>{detailPO.note}</span></div>}
                 </div>
@@ -387,6 +439,11 @@ function PurchaseOrdersPage() {
                         <td className="py-2 px-3">
                           <span className="font-mono text-muted-foreground mr-1.5">{l.sku}</span>
                           <span className="font-medium text-foreground">{l.name}</span>
+                          {(l.pr_item_id || l.prItemId || l.prLineId) && (
+                            <span className="ml-1.5 text-[10px] text-muted-foreground/80 font-mono bg-muted/50 px-1 py-0.5 rounded">
+                              (Ref: {l.pr_item_id || l.prItemId || l.prLineId})
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 px-3 text-muted-foreground">{l.warehouseName ?? detailPO.warehouseName}</td>
                         <td className="py-2 px-3 text-center font-semibold text-foreground">
@@ -452,12 +509,132 @@ function PurchaseOrdersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Linked PR Detail Dialog */}
+      <Dialog open={Boolean(viewLinkedPR)} onOpenChange={(open) => !open && setViewLinkedPR(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="border-b pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-base font-bold flex items-center gap-2">
+                  <span>ใบเสนอซื้อต้นทาง (Source PR)</span>
+                  <span className="font-mono text-xs font-bold text-sun-700 bg-sun-50 px-2 py-0.5 rounded">
+                    {viewLinkedPR?.prNumber}
+                  </span>
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  เอกสารขอจัดซื้อภายในที่ได้รับอนุมัติแล้ว และนำมาเปิดเป็นใบสั่งซื้อนี้
+                </DialogDescription>
+              </div>
+              {viewLinkedPR && <StatusBadge status={viewLinkedPR.status} />}
+            </div>
+          </DialogHeader>
+
+          {viewLinkedPR && (
+            <div className="space-y-4 pt-2 text-xs">
+              <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-3">
+                <div className="space-y-1">
+                  <div>
+                    <span className="text-muted-foreground">ผู้ขอซื้อ: </span>
+                    <span className="font-semibold text-foreground">{viewLinkedPR.requestedBy}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">วันที่ขอซื้อ: </span>
+                    <span className="text-foreground">{formatShortDate(viewLinkedPR.requestedAt)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">ผู้อนุมัติ: </span>
+                    <span className="font-semibold text-green-700">{viewLinkedPR.approvedBy || "ผู้จัดการร้าน"}</span>
+                  </div>
+                  {viewLinkedPR.approvedAt && (
+                    <div>
+                      <span className="text-muted-foreground">วันที่อนุมัติ: </span>
+                      <span className="text-foreground">{formatShortDate(viewLinkedPR.approvedAt)}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <div>
+                    <span className="text-muted-foreground">บริษัทคู่ค้า: </span>
+                    <span className="font-semibold text-foreground">{viewLinkedPR.companyName}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">ตัวแทนขาย: </span>
+                    <span className="text-foreground">{viewLinkedPR.agentName}</span>
+                  </div>
+                  {viewLinkedPR.quotationNumber && (
+                    <div>
+                      <span className="text-muted-foreground">อ้างอิงใบเสนอราคา: </span>
+                      <span className="font-mono text-foreground">{viewLinkedPR.quotationNumber}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">เหตุผลขอซื้อ: </span>
+                    <span className="text-foreground">{viewLinkedPR.reason}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-foreground mb-1.5">
+                  รายการสินค้าในใบเสนอซื้อ ({viewLinkedPR.lines.length} รายการ)
+                </h4>
+                <div className="rounded-md border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/70 text-foreground font-medium">
+                      <tr>
+                        <th className="py-2 px-3 text-left">ลำดับ</th>
+                        <th className="py-2 px-3 text-left">รายการสินค้า</th>
+                        <th className="py-2 px-3 text-center">จำนวน</th>
+                        <th className="py-2 px-3 text-right">ราคา/หน่วย</th>
+                        <th className="py-2 px-3 text-right">รวมเงิน (บาท)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {viewLinkedPR.lines.map((l, i) => (
+                        <tr key={i} className="hover:bg-muted/10">
+                          <td className="py-1.5 px-3 text-muted-foreground">{i + 1}</td>
+                          <td className="py-1.5 px-3">
+                            <span className="font-mono text-muted-foreground mr-1.5">{l.sku}</span>
+                            <span className="font-medium text-foreground">{l.name}</span>
+                          </td>
+                          <td className="py-1.5 px-3 text-center font-medium text-foreground">
+                            {l.qty} {l.unit}
+                          </td>
+                          <td className="py-1.5 px-3 text-right text-muted-foreground">
+                            ฿{l.unitPrice.toFixed(2)}
+                          </td>
+                          <td className="py-1.5 px-3 text-right font-medium text-foreground">
+                            ฿{l.total.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t bg-muted/30 font-semibold">
+                      <tr>
+                        <td colSpan={4} className="py-2 px-3 text-right">
+                          ยอดรวมสุทธิ:
+                        </td>
+                        <td className="py-2 px-3 text-right text-sun-700 font-bold">
+                          ฿{viewLinkedPR.totalAmount.toLocaleString()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog: Create PO from Approved PR */}
       <FormDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         title="ออกใบสั่งซื้อ (PO) จากใบเสนอซื้อที่อนุมัติแล้ว"
         description="PO สามารถออกได้เฉพาะใบเสนอซื้อ (PR) ที่ผู้จัดการร้านอนุมัติแล้วเท่านั้น"
+        submitLabel="ยืนยันการออก PO"
+        onSubmit={handleGeneratePO}
         confirmLabel="ยืนยันการออก PO"
         onConfirm={handleGeneratePO}
       >
@@ -477,16 +654,78 @@ function PurchaseOrdersPage() {
             </Select>
           </Field>
 
-          {/* Show details of selected PR */}
+          {/* Show details of selected PR (Auto-filled) */}
           {selectedPRId && (() => {
             const pr = approvedPRs.find((p) => p.id === selectedPRId);
             if (!pr) return null;
             return (
-              <div className="rounded-lg border bg-muted/30 p-3 text-xs space-y-1">
-                <div><span className="text-muted-foreground">บริษัทคู่ค้า: </span><span className="font-semibold text-foreground">{pr.companyName}</span></div>
-                <div><span className="text-muted-foreground">ตัวแทนผู้รับผิดชอบ: </span><span>{pr.agentName}</span></div>
-                <div><span className="text-muted-foreground">เหตุผลการจัดซื้อ: </span><span>{pr.reason}</span></div>
-                <div><span className="text-muted-foreground">รายการสินค้า: </span><span>{pr.lines.length} รายการ (ยอดรวม ฿{pr.totalAmount.toLocaleString()})</span></div>
+              <div className="space-y-3">
+                <div className="rounded-lg border bg-muted/20 p-3 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-foreground flex items-center gap-1.5">
+                      <Building2 className="size-3.5 text-sun-600" />
+                      <span>{pr.companyName}</span>
+                    </div>
+                    <Badge variant="outline" className="font-mono text-[11px] text-sun-700 bg-sun-50 border-sun-200">
+                      Ref: {pr.prNumber}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-muted-foreground pt-1">
+                    <div>
+                      <span>ตัวแทนผู้ประสานงาน: </span>
+                      <strong className="text-foreground font-medium">{pr.agentName}</strong>
+                    </div>
+                    {pr.quotationNumber && (
+                      <div>
+                        <span>ใบเสนอราคา: </span>
+                        <strong className="text-foreground font-mono">{pr.quotationNumber}</strong>
+                      </div>
+                    )}
+                    <div className="col-span-2">
+                      <span>เหตุผลการจัดซื้อ: </span>
+                      <span className="text-foreground">{pr.reason}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items Auto-filled preview */}
+                <div>
+                  <div className="flex items-center justify-between text-xs font-semibold text-foreground mb-1.5">
+                    <span>รายการสินค้าที่จะสั่งซื้อ (ดึงจาก PR อัตโนมัติ {pr.lines.length} รายการ)</span>
+                    <span className="text-sun-700 font-bold">รวม ฿{pr.totalAmount.toLocaleString()}</span>
+                  </div>
+                  <div className="rounded-md border overflow-hidden max-h-48 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/80 text-foreground sticky top-0 font-medium">
+                        <tr>
+                          <th className="py-1.5 px-2.5 text-left">สินค้า</th>
+                          <th className="py-1.5 px-2 text-center">จำนวน</th>
+                          <th className="py-1.5 px-2 text-right">ราคา/หน่วย</th>
+                          <th className="py-1.5 px-2.5 text-right">ยอดรวม</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {pr.lines.map((l, i) => (
+                          <tr key={i} className="hover:bg-muted/10">
+                            <td className="py-1.5 px-2.5">
+                              <div className="font-medium text-foreground">{l.name}</div>
+                              <div className="text-[10px] font-mono text-muted-foreground">{l.sku}</div>
+                            </td>
+                            <td className="py-1.5 px-2 text-center font-semibold text-foreground">
+                              {l.qty} {l.unit}
+                            </td>
+                            <td className="py-1.5 px-2 text-right text-muted-foreground">
+                              ฿{l.unitPrice.toFixed(2)}
+                            </td>
+                            <td className="py-1.5 px-2.5 text-right font-medium text-foreground">
+                              ฿{l.total.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             );
           })()}

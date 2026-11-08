@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import {
   AlertTriangle,
@@ -52,6 +52,7 @@ export const Route = createFileRoute("/_admin/manager/approve-pr")({
 
 function ApprovePRPage() {
   const { state, actions } = useStore();
+  const navigate = useNavigate();
   const prs = state.purchaseRequisitions;
 
   const [activeTab, setActiveTab] = useState<string>("pending");
@@ -65,12 +66,26 @@ function ApprovePRPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  const pendingPRs = useMemo(() => prs.filter((p) => p.status === "รออนุมัติ"), [prs]);
-  const approvedPRs = useMemo(
-    () => prs.filter((p) => p.status === "อนุมัติ" || p.status === "แปลงเป็น PO แล้ว"),
+  const pendingPRs = useMemo(
+    () => prs.filter((p) => p.status === "รออนุมัติ" || p.status === "PENDING_APPROVAL"),
     [prs],
   );
-  const rejectedPRs = useMemo(() => prs.filter((p) => p.status === "ไม่อนุมัติ"), [prs]);
+  const approvedPRs = useMemo(
+    () =>
+      prs.filter(
+        (p) =>
+          p.status === "อนุมัติ" ||
+          p.status === "APPROVED" ||
+          p.status === "แปลงเป็น PO แล้ว" ||
+          p.status === "ORDERED" ||
+          p.status === "สั่งซื้อแล้ว",
+      ),
+    [prs],
+  );
+  const rejectedPRs = useMemo(
+    () => prs.filter((p) => p.status === "ไม่อนุมัติ" || p.status === "REJECTED"),
+    [prs],
+  );
 
   const pendingAmount = useMemo(
     () => pendingPRs.reduce((sum, p) => sum + p.totalAmount, 0),
@@ -213,7 +228,7 @@ function ApprovePRPage() {
             <Eye className="size-3.5 mr-1" />
             ตรวจพิจารณา
           </Button>
-          {r.status === "รออนุมัติ" && (
+          {(r.status === "รออนุมัติ" || r.status === "PENDING_APPROVAL") && (
             <>
               <Button
                 size="sm"
@@ -369,15 +384,44 @@ function ApprovePRPage() {
                   </div>
                 )}
 
-                {detailPR.status === "อนุมัติ" && (
-                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 p-3 text-sm text-emerald-800 dark:text-emerald-300">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <CheckCircle2 className="size-4" />
-                      <span>ผ่านการอนุมัติแล้ว</span>
+                {(detailPR.status === "อนุมัติ" ||
+                  detailPR.status === "APPROVED" ||
+                  detailPR.status === "แปลงเป็น PO แล้ว" ||
+                  detailPR.status === "ORDERED" ||
+                  detailPR.status === "สั่งซื้อแล้ว") && (
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 p-3 text-sm text-emerald-800 dark:text-emerald-300 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <CheckCircle2 className="size-4" />
+                        <span>ผ่านการอนุมัติแล้ว</span>
+                      </div>
+                      {detailPR.poId && (
+                        <span className="font-mono text-xs font-bold text-sun-800 bg-sun-100 dark:bg-sun-900/40 px-2 py-0.5 rounded">
+                          ออก PO แล้ว: {detailPR.poId}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs mt-0.5">
                       อนุมัติโดย: {detailPR.approvedBy || "ผู้จัดการร้าน"} ({detailPR.approvedAt ? formatShortDate(detailPR.approvedAt) : "-"})
                     </p>
+                    {detailPR.poId && (
+                      <div className="pt-2 border-t border-emerald-500/20 text-xs flex items-center justify-between">
+                        <span className="text-muted-foreground">
+                          ใบสั่งซื้อที่ออกแล้ว: <strong className="font-mono text-foreground">{detailPR.poId}</strong>
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-xs text-sun-700 border-sun-300 hover:bg-sun-50"
+                          onClick={() => {
+                            setDetailPR(null);
+                            navigate({ to: "/purchasing/orders" });
+                          }}
+                        >
+                          เปิดดูหน้าใบสั่งซื้อ (PO)
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -433,7 +477,7 @@ function ApprovePRPage() {
                 <Button variant="outline" onClick={() => setDetailPR(null)}>
                   ปิดหน้าต่าง
                 </Button>
-                {detailPR.status === "รออนุมัติ" && (
+                {(detailPR.status === "รออนุมัติ" || detailPR.status === "PENDING_APPROVAL") && (
                   <div className="flex gap-2">
                     <Button
                       variant="destructive"

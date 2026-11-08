@@ -209,10 +209,10 @@ function RequisitionsPage() {
   };
 
   const handleSavePR = () => {
-    if (!validate()) return;
+    if (!validate()) return false;
     const company = state.supplierCompanies.find((c) => c.id === companyId);
     const agent = state.supplierAgents.find((a) => a.id === agentId);
-    if (!company || !agent) return;
+    if (!company || !agent) return false;
 
     const quotation = state.quotations.find((q) => q.id === quotationId);
     const totalAmount = lines.reduce((sum, l) => sum + l.total, 0);
@@ -231,7 +231,10 @@ function RequisitionsPage() {
 
     toast.success(`สร้างใบเสนอซื้อ ${newPR.prNumber} สำเร็จ สถานะ: รออนุมัติ`);
     setCreateOpen(false);
+    return true;
   };
+  const handleSubmitCreatePR = handleSavePR;
+  const handleCreatePR = handleSavePR;
 
   // Simulation actions for manager
   const handleApprovePR = (prId: string) => {
@@ -249,11 +252,12 @@ function RequisitionsPage() {
   };
 
   const handleConfirmReject = () => {
-    if (!detailPR) return;
+    if (!detailPR) return false;
     actions.decidePurchaseRequisition(detailPR.id, "ไม่อนุมัติ", rejectReason);
     toast.error(`ไม่อนุมัติใบเสนอซื้อ ${detailPR.prNumber}`);
     setRejectOpen(false);
     setDetailPR({ ...detailPR, status: "ไม่อนุมัติ", rejectionReason: rejectReason });
+    return true;
   };
 
   // Convert to PO
@@ -264,17 +268,19 @@ function RequisitionsPage() {
   };
 
   const handleConfirmConvert = () => {
-    if (!detailPR) return;
+    if (!detailPR) return false;
     const targetWH = state.warehouses.find((w) => w.id === selectedWarehouseId);
     const whName = targetWH ? targetWH.name : "โกดังหลัก (หลังร้าน)";
 
     const res = actions.convertPRToPO(detailPR.id, selectedWarehouseId, whName);
     if (!res.ok) {
       toast.error(res.error ?? "ไม่สามารถแปลงเป็น PO ได้");
+      return false;
     } else {
       toast.success(`แปลง ${detailPR.prNumber} เป็นใบสั่งซื้อ ${res.po?.poNumber} เรียบร้อยแล้ว`);
       setConvertOpen(false);
       navigate({ to: "/purchasing/orders" });
+      return true;
     }
   };
 
@@ -289,17 +295,49 @@ function RequisitionsPage() {
   // Filtered PR list
   const filteredPRs = useMemo(() => {
     if (activeTab === "all") return state.purchaseRequisitions;
-    if (activeTab === "pending") return state.purchaseRequisitions.filter((p) => p.status === "รออนุมัติ");
-    if (activeTab === "approved") return state.purchaseRequisitions.filter((p) => p.status === "อนุมัติ");
-    if (activeTab === "converted") return state.purchaseRequisitions.filter((p) => p.status === "แปลงเป็น PO แล้ว");
-    if (activeTab === "rejected") return state.purchaseRequisitions.filter((p) => p.status === "ไม่อนุมัติ");
+    if (activeTab === "pending")
+      return state.purchaseRequisitions.filter((p) => p.status === "รออนุมัติ" || p.status === "PENDING_APPROVAL");
+    if (activeTab === "approved")
+      return state.purchaseRequisitions.filter(
+        (p) =>
+          (p.status === "อนุมัติ" || p.status === "APPROVED") &&
+          !p.poId &&
+          p.status !== "แปลงเป็น PO แล้ว" &&
+          p.status !== "ORDERED" &&
+          p.status !== "สั่งซื้อแล้ว",
+      );
+    if (activeTab === "converted")
+      return state.purchaseRequisitions.filter(
+        (p) =>
+          Boolean(p.poId) ||
+          p.status === "แปลงเป็น PO แล้ว" ||
+          p.status === "ORDERED" ||
+          p.status === "สั่งซื้อแล้ว",
+      );
+    if (activeTab === "rejected")
+      return state.purchaseRequisitions.filter((p) => p.status === "ไม่อนุมัติ" || p.status === "REJECTED");
     return state.purchaseRequisitions;
   }, [state.purchaseRequisitions, activeTab]);
 
   // Metrics
-  const pendingCount = state.purchaseRequisitions.filter((p) => p.status === "รออนุมัติ").length;
-  const approvedCount = state.purchaseRequisitions.filter((p) => p.status === "อนุมัติ").length;
-  const convertedCount = state.purchaseRequisitions.filter((p) => p.status === "แปลงเป็น PO แล้ว").length;
+  const pendingCount = state.purchaseRequisitions.filter(
+    (p) => p.status === "รออนุมัติ" || p.status === "PENDING_APPROVAL",
+  ).length;
+  const approvedCount = state.purchaseRequisitions.filter(
+    (p) =>
+      (p.status === "อนุมัติ" || p.status === "APPROVED") &&
+      !p.poId &&
+      p.status !== "แปลงเป็น PO แล้ว" &&
+      p.status !== "ORDERED" &&
+      p.status !== "สั่งซื้อแล้ว",
+  ).length;
+  const convertedCount = state.purchaseRequisitions.filter(
+    (p) =>
+      Boolean(p.poId) ||
+      p.status === "แปลงเป็น PO แล้ว" ||
+      p.status === "ORDERED" ||
+      p.status === "สั่งซื้อแล้ว",
+  ).length;
 
   const columns: DataTableColumn<PurchaseRequisition>[] = [
     {
@@ -355,39 +393,80 @@ function RequisitionsPage() {
     {
       id: "status",
       header: "สถานะ",
-      accessor: (p) => <StatusBadge status={p.status} />,
-      className: "w-32",
+      accessor: (p) => (
+        <div className="space-y-1">
+          <StatusBadge status={p.status} />
+          {p.poId && (
+            <div className="text-[11px] font-mono text-sun-700 flex items-center gap-1 font-semibold">
+              <span>PO:</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate({ to: "/purchasing/orders" });
+                }}
+                className="hover:underline text-sun-800"
+                title="คลิกเพื่อไปดูใบสั่งซื้อ"
+              >
+                {p.poId}
+              </button>
+            </div>
+          )}
+        </div>
+      ),
+      className: "w-36",
     },
     {
       id: "actions",
       header: "การกระทำ",
       align: "right",
-      accessor: (p) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => setDetailPR(p)}
-            title="ดูเอกสารใบเสนอซื้อ"
-          >
-            <Eye className="size-3.5 mr-1" />
-            <span>ดูเอกสาร</span>
-          </Button>
-          {p.status === "อนุมัติ" && (
+      accessor: (p) => {
+        const canCreatePO =
+          (p.status === "อนุมัติ" || p.status === "APPROVED") &&
+          !p.poId &&
+          p.status !== "แปลงเป็น PO แล้ว" &&
+          p.status !== "ORDERED" &&
+          p.status !== "สั่งซื้อแล้ว";
+
+        return (
+          <div className="flex items-center justify-end gap-1">
             <Button
+              variant="ghost"
               size="sm"
-              className="h-8 px-2.5 text-xs bg-sun-600 hover:bg-sun-700 text-white gap-1"
-              onClick={() => handleOpenConvert(p)}
-              title="แปลงเป็นใบสั่งซื้อ (PO)"
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setDetailPR(p)}
+              title="ดูเอกสารใบเสนอซื้อ"
             >
-              <ShoppingCart className="size-3" />
-              <span>สร้าง PO</span>
+              <Eye className="size-3.5 mr-1" />
+              <span>ดูเอกสาร</span>
             </Button>
-          )}
-        </div>
-      ),
-      className: "w-36",
+            {canCreatePO && (
+              <Button
+                size="sm"
+                className="h-8 px-2.5 text-xs bg-sun-600 hover:bg-sun-700 text-white gap-1"
+                onClick={() => handleOpenConvert(p)}
+                title="แปลงเป็นใบสั่งซื้อ (PO)"
+              >
+                <ShoppingCart className="size-3" />
+                <span>สร้าง PO</span>
+              </Button>
+            )}
+            {p.poId && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 text-xs text-sun-700 border-sun-200 hover:bg-sun-50 gap-1"
+                onClick={() => navigate({ to: "/purchasing/orders" })}
+                title="ไปดูใบสั่งซื้อที่ออกแล้ว"
+              >
+                <ShoppingCart className="size-3" />
+                <span>ดู PO</span>
+              </Button>
+            )}
+          </div>
+        );
+      },
+      className: "w-40",
     },
   ];
 
@@ -506,8 +585,29 @@ function RequisitionsPage() {
                     </div>
                   )}
                   {detailPR.poId && (
-                    <div className="pt-1 border-t mt-1 text-sun-700 font-semibold">
-                      ออกใบสั่งซื้อแล้ว: {detailPR.poId}
+                    <div className="col-span-2 pt-2 border-t mt-2 flex items-center justify-between bg-sun-50/70 p-2.5 rounded border border-sun-200">
+                      <div>
+                        <div className="text-[11px] text-muted-foreground font-medium">
+                          ใบสั่งซื้อที่ออกแล้ว (Generated PO Number)
+                        </div>
+                        <div className="text-sm font-bold font-mono text-sun-800">{detailPR.poId}</div>
+                        {detailPR.orderedAt && (
+                          <div className="text-[10px] text-muted-foreground">
+                            สั่งซื้อเมื่อ: {formatShortDate(detailPR.orderedAt)}
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        className="h-7 px-2.5 text-xs bg-sun-600 hover:bg-sun-700 text-white gap-1"
+                        onClick={() => {
+                          setDetailPR(null);
+                          navigate({ to: "/purchasing/orders" });
+                        }}
+                      >
+                        <ShoppingCart className="size-3" />
+                        <span>เปิดหน้าใบสั่งซื้อ (PO)</span>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -586,7 +686,7 @@ function RequisitionsPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {detailPR.status === "อนุมัติ" && (
+                  {(detailPR.status === "อนุมัติ" || detailPR.status === "APPROVED") && !detailPR.poId && (
                     <Button
                       size="sm"
                       className="bg-sun-600 hover:bg-sun-700 text-white gap-1 text-xs"
@@ -613,6 +713,8 @@ function RequisitionsPage() {
         onOpenChange={setConvertOpen}
         title={`ออกใบสั่งซื้อ (PO) จาก ${detailPR?.prNumber}`}
         description="สร้างใบสั่งซื้ออย่างเป็นทางการเพื่อส่งให้ตัวแทนจำหน่าย และกำหนดโกดังรับมอบสินค้า"
+        submitLabel="ยืนยันการออก PO"
+        onSubmit={handleConfirmConvert}
         confirmLabel="ยืนยันการออก PO"
         onConfirm={handleConfirmConvert}
       >
@@ -645,6 +747,8 @@ function RequisitionsPage() {
         onOpenChange={setRejectOpen}
         title="ระบุเหตุผลที่ไม่อนุมัติใบเสนอซื้อ"
         description="ข้อความเหตุผลจะถูกบันทึกลงในเอกสาร PR เพื่อให้พนักงานจัดซื้อนำไปปรับปรุง"
+        submitLabel="ยืนยันไม่อนุมัติ"
+        onSubmit={handleConfirmReject}
         confirmLabel="ยืนยันไม่อนุมัติ"
         onConfirm={handleConfirmReject}
       >
@@ -664,8 +768,10 @@ function RequisitionsPage() {
         onOpenChange={setCreateOpen}
         title="สร้างใบเสนอซื้อ (PR) ใหม่"
         description="กรอกข้อมูลคู่ค้า ตัวแทน รายการสินค้า และเหตุผลความจำเป็นในการสั่งซื้อ"
+        submitLabel="ส่งขออนุมัติ PR"
+        onSubmit={handleSubmitCreatePR}
         confirmLabel="ส่งขออนุมัติ PR"
-        onConfirm={handleSavePR}
+        onConfirm={handleSubmitCreatePR}
       >
         <div className="space-y-4 max-h-[72vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">

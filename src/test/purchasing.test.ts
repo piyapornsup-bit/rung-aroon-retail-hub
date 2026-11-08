@@ -209,6 +209,131 @@ describe("Round 3 Store Reducer & Purchasing Actions", () => {
     expect(s.purchaseOrders.some((p) => p.id === "PO-CONVERT-TEST")).toBe(true);
   });
 
+  it("enforces full PR to PO flow: approval, auto-fill, foreign key linking, and exclusion", () => {
+    let s = createInitialState();
+
+    // 1. Create a new PR (Pending)
+    const newPR = {
+      id: "PR-FLOW-001",
+      prNumber: "PR-2611-999",
+      companyId: "COMP-01",
+      companyName: "บริษัท สหพัฒนพิบูล จำกัด (มหาชน)",
+      agentId: "AGT-01",
+      agentName: "กมลวรรณ ทรัพย์เจริญ",
+      requestedBy: "วรรณา คุ้มค่า",
+      requestedAt: new Date().toISOString(),
+      reason: "ทดสอบการขอซื้อเติมสต็อก",
+      status: "รออนุมัติ" as const,
+      lines: [
+        {
+          id: "PRL-2611-999-1",
+          productId: "P01",
+          sku: "SNK-001",
+          name: "เลย์ รสมันฝรั่งแท้ 42 กรัม",
+          unit: "ซอง",
+          qty: 50,
+          unitPrice: 17,
+          total: 850,
+        },
+        {
+          id: "PRL-2611-999-2",
+          productId: "P02",
+          sku: "SNK-002",
+          name: "มาม่า บะหมี่กึ่งสำเร็จรูป ต้มยำกุ้ง",
+          unit: "ซอง",
+          qty: 100,
+          unitPrice: 6,
+          total: 600,
+        },
+      ],
+      totalAmount: 1450,
+    };
+
+    s = appReducer(s, { type: "requisitions/add", pr: newPR });
+    expect(selectPendingPRs(s).some((p) => p.id === "PR-FLOW-001")).toBe(true);
+    expect(selectApprovedPRs(s).some((p) => p.id === "PR-FLOW-001")).toBe(false);
+
+    // 2. Manager approves PR
+    s = appReducer(s, {
+      type: "requisitions/updateStatus",
+      id: "PR-FLOW-001",
+      status: "อนุมัติ",
+      by: "ผู้จัดการร้าน",
+      at: new Date().toISOString(),
+    });
+
+    const approvedPR = s.purchaseRequisitions.find((p) => p.id === "PR-FLOW-001");
+    expect(approvedPR?.status).toBe("อนุมัติ");
+    expect(selectApprovedPRs(s).some((p) => p.id === "PR-FLOW-001")).toBe(true);
+
+    // 3. Purchasing converts approved PR to PO
+    const poSeq = s.purchaseOrders.length + 1;
+    const poId = `PO-2611-${poSeq.toString().padStart(3, "0")}`;
+    const newPO: PurchaseOrder = {
+      id: poId,
+      poNumber: poId,
+      supplierName: approvedPR!.companyName,
+      companyId: approvedPR!.companyId,
+      agentId: approvedPR!.agentId,
+      agentName: approvedPR!.agentName,
+      prId: approvedPR!.id,
+      prNumber: approvedPR!.prNumber,
+      pr_id: approvedPR!.id,
+      requisition_id: approvedPR!.id,
+      warehouseId: "WH-01",
+      warehouseName: "โกดังหลัก (หลังร้าน)",
+      orderDate: new Date().toISOString(),
+      expectedDate: new Date().toISOString(),
+      status: "รอรับสินค้า",
+      lines: approvedPR!.lines.map((l, idx) => ({
+        id: `POL-${poId}-${idx + 1}`,
+        prLineId: l.id,
+        prItemId: l.id,
+        pr_item_id: l.id,
+        productId: l.productId,
+        sku: l.sku,
+        name: l.name,
+        unit: l.unit,
+        qty: l.qty,
+        costPrice: l.unitPrice,
+        total: l.total,
+        receivedQty: 0,
+        warehouseId: "WH-01",
+        warehouseName: "โกดังหลัก (หลังร้าน)",
+      })),
+      totalAmount: approvedPR!.totalAmount,
+      createdBy: "วรรณา คุ้มค่า",
+      note: `ออกใบสั่งซื้ออัตโนมัติจาก ${approvedPR!.prNumber}`,
+      paymentType: "เงินเชื่อ",
+      paymentStatus: "ยังไม่ขอจ่าย",
+    };
+
+    s = appReducer(s, {
+      type: "requisitions/convertToPO",
+      prId: approvedPR!.id,
+      newPO,
+    });
+
+    // Verify PO Foreign Keys and line item references
+    const createdPO = s.purchaseOrders.find((p) => p.id === poId);
+    expect(createdPO).toBeDefined();
+    expect(createdPO?.prId).toBe("PR-FLOW-001");
+    expect(createdPO?.prNumber).toBe("PR-2611-999");
+    expect(createdPO?.pr_id).toBe("PR-FLOW-001");
+    expect(createdPO?.requisition_id).toBe("PR-FLOW-001");
+    expect(createdPO?.lines).toHaveLength(2);
+    expect(createdPO?.lines[0].pr_item_id).toBe("PRL-2611-999-1");
+    expect(createdPO?.lines[1].pr_item_id).toBe("PRL-2611-999-2");
+
+    // Verify origin PR status and poId
+    const updatedPRAgain = s.purchaseRequisitions.find((p) => p.id === "PR-FLOW-001");
+    expect(updatedPRAgain?.status).toBe("แปลงเป็น PO แล้ว");
+    expect(updatedPRAgain?.poId).toBe(poId);
+
+    // Verify PR is now excluded from selectApprovedPRs so it cannot be selected again
+    expect(selectApprovedPRs(s).some((p) => p.id === "PR-FLOW-001")).toBe(false);
+  });
+
   it("handles payment requests and agent receipts", () => {
     let s = createInitialState();
     const newReq = {

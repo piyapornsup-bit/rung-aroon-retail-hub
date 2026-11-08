@@ -489,6 +489,8 @@ function QuotationsPage() {
         onOpenChange={setCreateOpen}
         title="สร้างใบเสนอราคาใหม่"
         description="กรอกข้อมูลใบเสนอราคาจากคู่ค้า และเชื่อมโยงตัวแทนจำหน่าย (เลือกได้หลายท่าน)"
+        submitLabel="บันทึกใบเสนอราคา"
+        onSubmit={handleSaveQuotation}
         confirmLabel="บันทึกใบเสนอราคา"
         onConfirm={handleSaveQuotation}
       >
